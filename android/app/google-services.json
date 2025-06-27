@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "149519171356",
+    "project_id": "topprix-9a1db",
+    "storage_bucket": "topprix-9a1db.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:149519171356:android:65fe866a772f8d059f04d9",
+        "android_client_info": {
+          "package_name": "com.kliklokal.topprix"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "149519171356-1pmor67mmgtm5qbqkmopb45fis4hlkg4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA_xmohvSJbpSP99zmYaIni6YVHcmZLzus"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "149519171356-1pmor67mmgtm5qbqkmopb45fis4hlkg4.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "149519171356-mm040kkmkubbncrlo95f05005f1ji0k8.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.kliklokal.topprix"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
