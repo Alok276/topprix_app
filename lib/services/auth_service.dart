@@ -17,7 +17,7 @@ class AuthService {
   final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   // Dio client for backend communication
-  final DioClient _dioClient = DioClient.instance;
+  final DioClient _dioClient = DioClient();
 
   // Singleton pattern
   static AuthService get instance {
