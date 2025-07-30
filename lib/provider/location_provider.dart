@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
-import '../models/api_response.dart';
 import '../services/location_service.dart';
 
 // Location State

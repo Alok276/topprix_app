@@ -1,6 +1,7 @@
 // lib/providers/auth_provider.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:topprix/provider/app_state.dart';
 import '../models/auth_state.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
@@ -34,7 +35,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         state = AuthState.authenticated(currentUser);
       } else {
         final isFirstTime = StorageService.isFirstTimeUser();
-        state = AuthState.unauthenticated(isFirstTime: isFirstTime);
+        state = AuthState.unauthenticated(isFirstTime: await isFirstTime);
       }
     } catch (e) {
       print('Error initializing auth: $e');
@@ -57,7 +58,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       } else {
         // User is signed out
         final isFirstTime = StorageService.isFirstTimeUser();
-        state = AuthState.unauthenticated(isFirstTime: isFirstTime);
+        state = AuthState.unauthenticated(isFirstTime: await isFirstTime);
       }
     } catch (e) {
       print('Error handling auth state change: $e');
@@ -130,7 +131,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       // Return to previous state but show success
       final isFirstTime = StorageService.isFirstTimeUser();
-      state = AuthState.unauthenticated(isFirstTime: isFirstTime);
+      state = AuthState.unauthenticated(isFirstTime: await isFirstTime);
     } catch (e) {
       print('Password reset error: $e');
       state = AuthState.error(_getErrorMessage(e));
@@ -197,7 +198,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _authService.signOut();
 
       final isFirstTime = StorageService.isFirstTimeUser();
-      state = AuthState.unauthenticated(isFirstTime: isFirstTime);
+      state = AuthState.unauthenticated(isFirstTime: await isFirstTime);
     } catch (e) {
       print('Sign out error: $e');
       state = AuthState.error(_getErrorMessage(e));
@@ -214,7 +215,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _authService.deleteAccount();
 
       final isFirstTime = StorageService.isFirstTimeUser();
-      state = AuthState.unauthenticated(isFirstTime: isFirstTime);
+      state = AuthState.unauthenticated(isFirstTime: await isFirstTime);
     } catch (e) {
       print('Delete account error: $e');
       state = AuthState.error(_getErrorMessage(e));
@@ -224,10 +225,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
   // ========== STATE MANAGEMENT ==========
 
   /// Clear error state
-  void clearError() {
+  void clearError() async {
     if (state.hasError) {
       final isFirstTime = StorageService.isFirstTimeUser();
-      state = AuthState.unauthenticated(isFirstTime: isFirstTime);
+      state = AuthState.unauthenticated(isFirstTime: await isFirstTime);
     }
   }
 
@@ -314,7 +315,8 @@ final userInitialsProvider = Provider<String>((ref) {
 /// Provider to determine navigation route based on auth state
 final authRouteProvider = Provider<String>((ref) {
   final authState = ref.watch(authProvider);
-  final isFirstTime = StorageService.isFirstTimeUser();
+  final appState = ref.watch(appStateProvider);
+  final isFirstTime = appState.isFirstTime;
 
   if (authState.isAuthenticated) {
     return '/home';

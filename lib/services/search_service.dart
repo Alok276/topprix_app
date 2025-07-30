@@ -1,6 +1,7 @@
-// lib/services/search_service.dart
+// lib/services/search_service.dart - NEW SIMPLIFIED VERSION
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:topprix/models/search_result_model.dart';
 import '../models/flyer_model.dart';
 import '../models/coupon_model.dart';
 import '../models/store_model.dart';
@@ -15,21 +16,17 @@ class SearchService {
 
   SearchService() : _dioClient = DioClient();
 
-  // ========== UNIVERSAL SEARCH ==========
+  // ========== BASIC SEARCH ==========
 
   /// Universal search across all content types
   Future<ApiResponse<SearchResultsModel>> searchAll({
     required String query,
     String? categoryId,
     String? storeId,
-    double? minDiscount,
-    double? maxDistance,
     double? latitude,
     double? longitude,
-    bool showExpiring = false,
-    List<String> contentTypes = const ['flyers', 'coupons', 'stores'],
-    String sortBy =
-        'relevance', // 'relevance', 'distance', 'discount', 'expiry', 'popularity'
+    double? maxDistance,
+    String sortBy = 'relevance', // 'relevance', 'distance', 'discount', 'date'
     int limit = 20,
     int page = 1,
   }) async {
@@ -39,16 +36,13 @@ class SearchService {
         'sortBy': sortBy,
         'limit': limit,
         'page': page,
-        'contentTypes': contentTypes.join(','),
       };
 
       if (categoryId != null) queryParams['categoryId'] = categoryId;
       if (storeId != null) queryParams['storeId'] = storeId;
-      if (minDiscount != null) queryParams['minDiscount'] = minDiscount;
-      if (maxDistance != null) queryParams['maxDistance'] = maxDistance;
       if (latitude != null) queryParams['latitude'] = latitude;
       if (longitude != null) queryParams['longitude'] = longitude;
-      if (showExpiring) queryParams['showExpiring'] = showExpiring;
+      if (maxDistance != null) queryParams['maxDistance'] = maxDistance;
 
       final response = await _dioClient.dio.get(
         '/search/all',
@@ -60,17 +54,17 @@ class SearchService {
       // Save search query for history
       await _saveSearchQuery(query);
 
-      // Track search analytics
-      await _trackSearch(query, searchResults.totalResults);
-
       return ApiResponse.success(searchResults);
     } catch (e) {
       return ApiResponse.error(_handleError(e));
     }
   }
 
+  // ADD THIS METHOD TO YOUR EXISTING SearchService CLASS
+// Place it after the searchAll method
+
   /// Search deals only (flyers + coupons)
-  Future<ApiResponse<SearchResultsModel>> searchDeals({
+  Future<ApiResponse<Map<String, dynamic>>> searchDeals({
     required String query,
     String? categoryId,
     String? storeId,
@@ -79,43 +73,51 @@ class SearchService {
     double? latitude,
     double? longitude,
     bool showExpiring = false,
-    List<String> dealTypes = const ['flyers', 'coupons'],
+    List<String>? dealTypes,
     String sortBy = 'relevance',
     int limit = 20,
     int page = 1,
   }) async {
     try {
-      final response = await searchAll(
-        query: query,
-        categoryId: categoryId,
-        storeId: storeId,
-        minDiscount: minDiscount,
-        maxDistance: maxDistance,
-        latitude: latitude,
-        longitude: longitude,
-        showExpiring: showExpiring,
-        contentTypes: dealTypes,
-        sortBy: sortBy,
-        limit: limit,
-        page: page,
+      final queryParams = <String, dynamic>{
+        'q': query,
+        'sortBy': sortBy,
+        'limit': limit,
+        'page': page,
+      };
+
+      if (categoryId != null) queryParams['categoryId'] = categoryId;
+      if (storeId != null) queryParams['storeId'] = storeId;
+      if (minDiscount != null) queryParams['minDiscount'] = minDiscount;
+      if (maxDistance != null) queryParams['maxDistance'] = maxDistance;
+      if (latitude != null) queryParams['latitude'] = latitude;
+      if (longitude != null) queryParams['longitude'] = longitude;
+      if (showExpiring) queryParams['showExpiring'] = showExpiring;
+      if (dealTypes != null && dealTypes.isNotEmpty) {
+        queryParams['dealTypes'] = dealTypes.join(',');
+      }
+
+      final response = await _dioClient.dio.get(
+        '/search/deals',
+        queryParameters: queryParams,
       );
 
-      return response;
+      // Save search query for history
+      await _saveSearchQuery(query);
+
+      return ApiResponse.success(response.data);
     } catch (e) {
       return ApiResponse.error(_handleError(e));
     }
   }
 
-  // ========== SPECIFIC CONTENT SEARCH ==========
-
-  /// Search flyers specifically
+  /// Search flyers only
   Future<ApiResponse<List<FlyerModel>>> searchFlyers({
     required String query,
     String? categoryId,
     String? storeId,
     double? latitude,
     double? longitude,
-    double? maxDistance,
     bool activeOnly = true,
     String sortBy = 'relevance',
     int limit = 20,
@@ -133,7 +135,6 @@ class SearchService {
       if (storeId != null) queryParams['storeId'] = storeId;
       if (latitude != null) queryParams['latitude'] = latitude;
       if (longitude != null) queryParams['longitude'] = longitude;
-      if (maxDistance != null) queryParams['maxDistance'] = maxDistance;
       if (activeOnly) queryParams['activeOnly'] = activeOnly;
 
       final response = await _dioClient.dio.get(
@@ -152,14 +153,13 @@ class SearchService {
     }
   }
 
-  /// Search coupons specifically
+  /// Search coupons only
   Future<ApiResponse<List<CouponModel>>> searchCoupons({
     required String query,
     String? categoryId,
     String? storeId,
     double? latitude,
     double? longitude,
-    double? maxDistance,
     bool? isOnline,
     bool? isInStore,
     bool activeOnly = true,
@@ -179,7 +179,6 @@ class SearchService {
       if (storeId != null) queryParams['storeId'] = storeId;
       if (latitude != null) queryParams['latitude'] = latitude;
       if (longitude != null) queryParams['longitude'] = longitude;
-      if (maxDistance != null) queryParams['maxDistance'] = maxDistance;
       if (isOnline != null) queryParams['isOnline'] = isOnline;
       if (isInStore != null) queryParams['isInStore'] = isInStore;
       if (activeOnly) queryParams['activeOnly'] = activeOnly;
@@ -200,7 +199,7 @@ class SearchService {
     }
   }
 
-  /// Search stores specifically
+  /// Search stores only
   Future<ApiResponse<List<StoreModel>>> searchStores({
     required String query,
     String? categoryId,
@@ -246,130 +245,6 @@ class SearchService {
     }
   }
 
-  // ========== ADVANCED SEARCH ==========
-
-  /// Advanced search with multiple filters
-  Future<ApiResponse<SearchResultsModel>> advancedSearch({
-    String? query,
-    SearchFilters? filters,
-    SearchSort? sort,
-    int limit = 20,
-    int page = 1,
-  }) async {
-    try {
-      final queryParams = <String, dynamic>{
-        'limit': limit,
-        'page': page,
-      };
-
-      if (query != null && query.isNotEmpty) {
-        queryParams['q'] = query;
-      }
-
-      // Apply filters
-      if (filters != null) {
-        if (filters.categoryIds.isNotEmpty) {
-          queryParams['categoryIds'] = filters.categoryIds.join(',');
-        }
-        if (filters.storeIds.isNotEmpty) {
-          queryParams['storeIds'] = filters.storeIds.join(',');
-        }
-        if (filters.minDiscount != null) {
-          queryParams['minDiscount'] = filters.minDiscount;
-        }
-        if (filters.maxDiscount != null) {
-          queryParams['maxDiscount'] = filters.maxDiscount;
-        }
-        if (filters.minPrice != null) {
-          queryParams['minPrice'] = filters.minPrice;
-        }
-        if (filters.maxPrice != null) {
-          queryParams['maxPrice'] = filters.maxPrice;
-        }
-        if (filters.maxDistance != null) {
-          queryParams['maxDistance'] = filters.maxDistance;
-        }
-        if (filters.latitude != null) {
-          queryParams['latitude'] = filters.latitude;
-        }
-        if (filters.longitude != null) {
-          queryParams['longitude'] = filters.longitude;
-        }
-        if (filters.startDate != null) {
-          queryParams['startDate'] = filters.startDate!.toIso8601String();
-        }
-        if (filters.endDate != null) {
-          queryParams['endDate'] = filters.endDate!.toIso8601String();
-        }
-        if (filters.contentTypes.isNotEmpty) {
-          queryParams['contentTypes'] = filters.contentTypes.join(',');
-        }
-        if (filters.isOnline != null) {
-          queryParams['isOnline'] = filters.isOnline;
-        }
-        if (filters.isInStore != null) {
-          queryParams['isInStore'] = filters.isInStore;
-        }
-        if (filters.isActive != null) {
-          queryParams['isActive'] = filters.isActive;
-        }
-        if (filters.isSponsored != null) {
-          queryParams['isSponsored'] = filters.isSponsored;
-        }
-        if (filters.showExpiring) {
-          queryParams['showExpiring'] = filters.showExpiring;
-        }
-        if (filters.openNow) {
-          queryParams['openNow'] = filters.openNow;
-        }
-      }
-
-      // Apply sorting
-      if (sort != null) {
-        queryParams['sortBy'] = sort.field;
-        queryParams['sortOrder'] = sort.order.name;
-      }
-
-      final response = await _dioClient.dio.get(
-        '/search/advanced',
-        queryParameters: queryParams,
-      );
-
-      final searchResults = SearchResultsModel.fromJson(response.data);
-
-      if (query != null && query.isNotEmpty) {
-        await _saveSearchQuery(query);
-        await _trackSearch(query, searchResults.totalResults);
-      }
-
-      return ApiResponse.success(searchResults);
-    } catch (e) {
-      return ApiResponse.error(_handleError(e));
-    }
-  }
-
-  /// Search with filters object
-  Future<ApiResponse<SearchResultsModel>> searchWithFilters({
-    required String query,
-    required SearchFilters filters,
-    String sortBy = 'relevance',
-    int limit = 20,
-    int page = 1,
-  }) async {
-    final sort = SearchSort(
-      field: sortBy,
-      order: SortOrder.desc,
-    );
-
-    return await advancedSearch(
-      query: query,
-      filters: filters,
-      sort: sort,
-      limit: limit,
-      page: page,
-    );
-  }
-
   // ========== SEARCH SUGGESTIONS ==========
 
   /// Get search suggestions/autocomplete
@@ -391,7 +266,7 @@ class SearchService {
         queryParameters: queryParams,
       );
 
-      final suggestions = List<String>.from(response.data['suggestions']);
+      final suggestions = List<String>.from(response.data['suggestions'] ?? []);
       return ApiResponse.success(suggestions);
     } catch (e) {
       return ApiResponse.error(_handleError(e));
@@ -417,7 +292,7 @@ class SearchService {
         queryParameters: queryParams,
       );
 
-      final searches = List<String>.from(response.data['searches']);
+      final searches = List<String>.from(response.data['searches'] ?? []);
       return ApiResponse.success(searches);
     } catch (e) {
       return ApiResponse.error(_handleError(e));
@@ -425,7 +300,7 @@ class SearchService {
   }
 
   /// Get trending searches
-  Future<ApiResponse<List<TrendingSearch>>> getTrendingSearches({
+  Future<ApiResponse<List<String>>> getTrendingSearches({
     int limit = 10,
     String? category,
   }) async {
@@ -441,37 +316,8 @@ class SearchService {
         queryParameters: queryParams,
       );
 
-      final trending = (response.data['trending'] as List)
-          .map((item) => TrendingSearch.fromJson(item))
-          .toList();
-
+      final trending = List<String>.from(response.data['trending'] ?? []);
       return ApiResponse.success(trending);
-    } catch (e) {
-      return ApiResponse.error(_handleError(e));
-    }
-  }
-
-  /// Get personalized search suggestions
-  Future<ApiResponse<List<String>>> getPersonalizedSuggestions({
-    required String query,
-    String? userId,
-    int limit = 10,
-  }) async {
-    try {
-      final queryParams = <String, dynamic>{
-        'q': query,
-        'limit': limit,
-      };
-
-      if (userId != null) queryParams['userId'] = userId;
-
-      final response = await _dioClient.dio.get(
-        '/search/personalized-suggestions',
-        queryParameters: queryParams,
-      );
-
-      final suggestions = List<String>.from(response.data['suggestions']);
-      return ApiResponse.success(suggestions);
     } catch (e) {
       return ApiResponse.error(_handleError(e));
     }
@@ -479,31 +325,33 @@ class SearchService {
 
   // ========== SEARCH HISTORY ==========
 
-  /// Get user's search history
+  /// Get user's search history from local storage
   Future<ApiResponse<List<SearchHistoryItem>>> getSearchHistory({
     int limit = 50,
-    int page = 1,
   }) async {
     try {
-      // Get from local storage first
       final localHistory = await StorageService.getSearchHistory();
 
-      // Also try to get from server if user is logged in
-      try {
-        final response = await _dioClient.dio.get('/search/history',
-            queryParameters: {'limit': limit, 'page': page});
+      // Limit the results
+      final limitedHistory = localHistory.take(limit).toList();
 
-        final serverHistory = (response.data['history'] as List)
-            .map((item) => SearchHistoryItem.fromJson(item))
-            .toList();
+      return ApiResponse.success(limitedHistory);
+    } catch (e) {
+      return ApiResponse.error(_handleError(e));
+    }
+  }
 
-        // Merge local and server history
-        final mergedHistory = _mergeSearchHistory(localHistory, serverHistory);
-        return ApiResponse.success(mergedHistory);
-      } catch (e) {
-        // If server request fails, return local history
-        return ApiResponse.success(localHistory);
-      }
+  /// Get recent search queries (simple strings)
+  Future<ApiResponse<List<String>>> getRecentSearches({
+    int limit = 10,
+  }) async {
+    try {
+      final recentSearches = await StorageService.getRecentSearches();
+
+      // Limit the results
+      final limitedSearches = recentSearches.take(limit).toList();
+
+      return ApiResponse.success(limitedSearches);
     } catch (e) {
       return ApiResponse.error(_handleError(e));
     }
@@ -512,16 +360,8 @@ class SearchService {
   /// Clear search history
   Future<ApiResponse<bool>> clearSearchHistory() async {
     try {
-      // Clear local storage
       await StorageService.clearSearchHistory();
-
-      // Try to clear server history if user is logged in
-      try {
-        await _dioClient.dio.delete('/search/history');
-      } catch (e) {
-        // Ignore server errors, local clear is sufficient
-      }
-
+      await StorageService.clearRecentSearches();
       return ApiResponse.success(true);
     } catch (e) {
       return ApiResponse.error(_handleError(e));
@@ -532,127 +372,61 @@ class SearchService {
   Future<ApiResponse<bool>> removeFromSearchHistory(String query) async {
     try {
       await StorageService.removeFromSearchHistory(query);
-
-      try {
-        await _dioClient.dio.delete('/search/history/$query');
-      } catch (e) {
-        // Ignore server errors
-      }
-
       return ApiResponse.success(true);
     } catch (e) {
       return ApiResponse.error(_handleError(e));
     }
   }
 
-  // ========== SEARCH FILTERS ==========
+  // ========== SIMPLE FILTERS ==========
 
-  /// Get available search filters
-  Future<ApiResponse<AvailableFilters>> getAvailableFilters({
-    String? query,
-    String? category,
+  /// Search with basic filters
+  Future<ApiResponse<SearchResultsModel>> searchWithBasicFilters({
+    required String query,
+    BasicSearchFilters? filters,
+    String sortBy = 'relevance',
+    int limit = 20,
+    int page = 1,
   }) async {
     try {
-      final queryParams = <String, dynamic>{};
+      final queryParams = <String, dynamic>{
+        'q': query,
+        'sortBy': sortBy,
+        'limit': limit,
+        'page': page,
+      };
 
-      if (query != null) queryParams['q'] = query;
-      if (category != null) queryParams['category'] = category;
+      if (filters != null) {
+        if (filters.categoryId != null)
+          queryParams['categoryId'] = filters.categoryId;
+        if (filters.storeId != null) queryParams['storeId'] = filters.storeId;
+        if (filters.minDiscount != null)
+          queryParams['minDiscount'] = filters.minDiscount;
+        if (filters.maxDistance != null)
+          queryParams['maxDistance'] = filters.maxDistance;
+        if (filters.latitude != null)
+          queryParams['latitude'] = filters.latitude;
+        if (filters.longitude != null)
+          queryParams['longitude'] = filters.longitude;
+        if (filters.isOnline != null)
+          queryParams['isOnline'] = filters.isOnline;
+        if (filters.isInStore != null)
+          queryParams['isInStore'] = filters.isInStore;
+        if (filters.activeOnly != null)
+          queryParams['activeOnly'] = filters.activeOnly;
+        if (filters.dealTypes != null && filters.dealTypes!.isNotEmpty) {
+          queryParams['dealTypes'] = filters.dealTypes!.join(',');
+        }
+      }
 
       final response = await _dioClient.dio.get(
-        '/search/filters',
+        '/search/filtered',
         queryParameters: queryParams,
       );
 
-      final filters = AvailableFilters.fromJson(response.data);
-      return ApiResponse.success(filters);
-    } catch (e) {
-      return ApiResponse.error(_handleError(e));
-    }
-  }
-
-  /// Get filter suggestions based on current search
-  Future<ApiResponse<FilterSuggestions>> getFilterSuggestions({
-    required String query,
-    SearchFilters? currentFilters,
-  }) async {
-    try {
-      final data = <String, dynamic>{
-        'query': query,
-      };
-
-      if (currentFilters != null) {
-        data['currentFilters'] = currentFilters.toJson();
-      }
-
-      final response = await _dioClient.dio.post(
-        '/search/filter-suggestions',
-        data: data,
-      );
-
-      final suggestions = FilterSuggestions.fromJson(response.data);
-      return ApiResponse.success(suggestions);
-    } catch (e) {
-      return ApiResponse.error(_handleError(e));
-    }
-  }
-
-  // ========== SAVED SEARCHES ==========
-
-  /// Save a search query with filters
-  Future<ApiResponse<bool>> saveSearch({
-    required String name,
-    required String query,
-    SearchFilters? filters,
-    bool enableNotifications = false,
-  }) async {
-    try {
-      await _dioClient.dio.post('/search/save', data: {
-        'name': name,
-        'query': query,
-        'filters': filters?.toJson(),
-        'enableNotifications': enableNotifications,
-        'createdAt': DateTime.now().toIso8601String(),
-      });
-
-      return ApiResponse.success(true);
-    } catch (e) {
-      return ApiResponse.error(_handleError(e));
-    }
-  }
-
-  /// Get saved searches
-  Future<ApiResponse<List<SavedSearch>>> getSavedSearches() async {
-    try {
-      final response = await _dioClient.dio.get('/search/saved');
-
-      final savedSearches = (response.data['savedSearches'] as List)
-          .map((item) => SavedSearch.fromJson(item))
-          .toList();
-
-      return ApiResponse.success(savedSearches);
-    } catch (e) {
-      return ApiResponse.error(_handleError(e));
-    }
-  }
-
-  /// Delete saved search
-  Future<ApiResponse<bool>> deleteSavedSearch(String savedSearchId) async {
-    try {
-      await _dioClient.dio.delete('/search/saved/$savedSearchId');
-      return ApiResponse.success(true);
-    } catch (e) {
-      return ApiResponse.error(_handleError(e));
-    }
-  }
-
-  /// Execute saved search
-  Future<ApiResponse<SearchResultsModel>> executeSavedSearch(
-      String savedSearchId) async {
-    try {
-      final response =
-          await _dioClient.dio.post('/search/saved/$savedSearchId/execute');
-
       final searchResults = SearchResultsModel.fromJson(response.data);
+      await _saveSearchQuery(query);
+
       return ApiResponse.success(searchResults);
     } catch (e) {
       return ApiResponse.error(_handleError(e));
@@ -661,38 +435,21 @@ class SearchService {
 
   // ========== SEARCH ANALYTICS ==========
 
-  /// Get search analytics for user
-  Future<ApiResponse<SearchAnalytics>> getSearchAnalytics({
-    String? timeframe = 'month',
-  }) async {
-    try {
-      final response = await _dioClient.dio
-          .get('/search/analytics', queryParameters: {'timeframe': timeframe});
-
-      final analytics = SearchAnalytics.fromJson(response.data);
-      return ApiResponse.success(analytics);
-    } catch (e) {
-      return ApiResponse.error(_handleError(e));
-    }
-  }
-
-  /// Track search interaction
+  /// Track search interaction for analytics
   Future<ApiResponse<bool>> trackSearchInteraction({
     required String query,
-    required String action, // 'click', 'save', 'share', 'view_more'
+    required String action, // 'click', 'view', 'save', 'share'
     String? itemId,
     String? itemType,
     int? position,
-    Map<String, dynamic>? metadata,
   }) async {
     try {
-      await _dioClient.dio.post('/search/track-interaction', data: {
+      await _dioClient.dio.post('/search/track', data: {
         'query': query,
         'action': action,
         'itemId': itemId,
         'itemType': itemType,
         'position': position,
-        'metadata': metadata,
         'timestamp': DateTime.now().toIso8601String(),
       });
 
@@ -705,62 +462,18 @@ class SearchService {
 
   // ========== UTILITY METHODS ==========
 
-  /// Save search query to history
+  /// Save search query to local storage
   Future<void> _saveSearchQuery(String query) async {
     try {
+      // Add to detailed search history
       await StorageService.addToSearchHistory(query);
 
-      // Also save to server if user is logged in
-      try {
-        await _dioClient.dio.post('/search/history', data: {
-          'query': query,
-          'timestamp': DateTime.now().toIso8601String(),
-        });
-      } catch (e) {
-        // Ignore server errors for history
-      }
+      // Add to simple recent searches
+      await StorageService.addRecentSearch(query);
     } catch (e) {
-      // Ignore history save errors
+      print('Error saving search query: $e');
+      // Don't throw error, just log it
     }
-  }
-
-  /// Track search for analytics
-  Future<void> _trackSearch(String query, int resultCount) async {
-    try {
-      await _dioClient.dio.post('/analytics/search', data: {
-        'query': query,
-        'resultCount': resultCount,
-        'timestamp': DateTime.now().toIso8601String(),
-      });
-    } catch (e) {
-      // Ignore analytics errors
-    }
-  }
-
-  /// Merge local and server search history
-  List<SearchHistoryItem> _mergeSearchHistory(
-    List<SearchHistoryItem> local,
-    List<SearchHistoryItem> server,
-  ) {
-    final merged = <String, SearchHistoryItem>{};
-
-    // Add server items first (they have more metadata)
-    for (final item in server) {
-      merged[item.query] = item;
-    }
-
-    // Add local items if not already present
-    for (final item in local) {
-      if (!merged.containsKey(item.query)) {
-        merged[item.query] = item;
-      }
-    }
-
-    // Return sorted by timestamp (newest first)
-    final result = merged.values.toList();
-    result.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-
-    return result;
   }
 
   /// Validate search query
@@ -822,5 +535,91 @@ class SearchService {
       }
     }
     return 'Search error: ${error.toString()}';
+  }
+}
+
+// ========== SIMPLE FILTER MODEL ==========
+
+class BasicSearchFilters {
+  final String? categoryId;
+  final String? storeId;
+  final double? minDiscount;
+  final double? maxDistance;
+  final double? latitude;
+  final double? longitude;
+  final bool? isOnline;
+  final bool? isInStore;
+  final bool? activeOnly;
+  final List<String>? dealTypes; // ['flyer', 'coupon']
+
+  BasicSearchFilters({
+    this.categoryId,
+    this.storeId,
+    this.minDiscount,
+    this.maxDistance,
+    this.latitude,
+    this.longitude,
+    this.isOnline,
+    this.isInStore,
+    this.activeOnly,
+    this.dealTypes,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'categoryId': categoryId,
+      'storeId': storeId,
+      'minDiscount': minDiscount,
+      'maxDistance': maxDistance,
+      'latitude': latitude,
+      'longitude': longitude,
+      'isOnline': isOnline,
+      'isInStore': isInStore,
+      'activeOnly': activeOnly,
+      'dealTypes': dealTypes,
+    };
+  }
+
+  factory BasicSearchFilters.fromJson(Map<String, dynamic> json) {
+    return BasicSearchFilters(
+      categoryId: json['categoryId'],
+      storeId: json['storeId'],
+      minDiscount: json['minDiscount']?.toDouble(),
+      maxDistance: json['maxDistance']?.toDouble(),
+      latitude: json['latitude']?.toDouble(),
+      longitude: json['longitude']?.toDouble(),
+      isOnline: json['isOnline'],
+      isInStore: json['isInStore'],
+      activeOnly: json['activeOnly'],
+      dealTypes: json['dealTypes'] != null
+          ? List<String>.from(json['dealTypes'])
+          : null,
+    );
+  }
+
+  BasicSearchFilters copyWith({
+    String? categoryId,
+    String? storeId,
+    double? minDiscount,
+    double? maxDistance,
+    double? latitude,
+    double? longitude,
+    bool? isOnline,
+    bool? isInStore,
+    bool? activeOnly,
+    List<String>? dealTypes,
+  }) {
+    return BasicSearchFilters(
+      categoryId: categoryId ?? this.categoryId,
+      storeId: storeId ?? this.storeId,
+      minDiscount: minDiscount ?? this.minDiscount,
+      maxDistance: maxDistance ?? this.maxDistance,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      isOnline: isOnline ?? this.isOnline,
+      isInStore: isInStore ?? this.isInStore,
+      activeOnly: activeOnly ?? this.activeOnly,
+      dealTypes: dealTypes ?? this.dealTypes,
+    );
   }
 }

@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../models/api_response.dart';
 import '../services/search_service.dart';
 
 // Search State

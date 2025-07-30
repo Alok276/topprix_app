@@ -1,28 +1,29 @@
-// lib/core/router/app_router.dart - Updated with new pages
+// lib/core/router/app_router.dart - FIXED VERSION
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:topprix/provider/auth_provider.dart';
-import 'package:topprix/ui/pages/home/home_dashboard.dart';
+import 'package:topprix/provider/app_state.dart';
+import '../../provider/auth_provider.dart';
 import '../../ui/Auths/splash_screen.dart';
 import '../../ui/Auths/onboarding_screen.dart';
 import '../../ui/Auths/login_screen.dart';
 import '../../ui/Auths/email_login_screen.dart';
 import '../../ui/Auths/register_screen.dart';
 import '../../ui/Auths/forgot_password_screen.dart';
-import '../../ui/Auths/home_screen.dart';
+import '../../ui/pages/home/home_dashboard.dart';
 import '../../ui/pages/search/search_results_page.dart';
-import '../../services/storage_service.dart';
 import '../../models/auth_state.dart';
 
 // Router Provider
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
+  final appState = ref.watch(appStateProvider);
 
   return GoRouter(
     initialLocation: '/splash',
     debugLogDiagnostics: true,
-    redirect: (context, state) => _handleRedirect(context, state, authState),
+    redirect: (context, state) =>
+        _handleRedirect(context, state, authState, appState),
     routes: _buildRoutes(),
     errorBuilder: (context, state) => _buildErrorPage(context, state),
   );
@@ -30,13 +31,18 @@ final routerProvider = Provider<GoRouter>((ref) {
 
 // ========== REDIRECT LOGIC ==========
 String? _handleRedirect(
-    BuildContext context, GoRouterState state, AuthState authState) {
+  BuildContext context,
+  GoRouterState state,
+  AuthState authState,
+  AppState appState,
+) {
   final currentLocation = state.uri.toString();
 
   // Don't redirect during loading or on error pages
   if (currentLocation == '/splash' ||
       currentLocation.startsWith('/error') ||
-      authState.isLoading) {
+      authState.isLoading ||
+      appState.isLoading) {
     return null;
   }
 
@@ -52,7 +58,8 @@ String? _handleRedirect(
 
   // Handle unauthenticated users
   if (authState.isUnauthenticated) {
-    final isFirstTime = StorageService.isFirstTimeUser();
+    // Use the app state's isFirstTime which is loaded asynchronously
+    final isFirstTime = appState.isFirstTime;
 
     // First-time users should see onboarding
     if (isFirstTime && !currentLocation.startsWith('/onboarding')) {
@@ -138,184 +145,106 @@ List<RouteBase> _buildRoutes() {
       },
     ),
 
-    // Placeholder routes for navigation (you'll create these pages later)
-    GoRoute(
-      path: '/flyers',
-      name: 'flyers',
-      builder: (context, state) => const PlaceholderPage(title: 'Flyers'),
-    ),
-    GoRoute(
-      path: '/coupons',
-      name: 'coupons',
-      builder: (context, state) => const PlaceholderPage(title: 'Coupons'),
-    ),
-    GoRoute(
-      path: '/stores',
-      name: 'stores',
-      builder: (context, state) => const PlaceholderPage(title: 'Stores'),
-    ),
-    GoRoute(
-      path: '/profile',
-      name: 'profile',
-      builder: (context, state) => const PlaceholderPage(title: 'Profile'),
-    ),
+    // Categories
     GoRoute(
       path: '/categories',
       name: 'categories',
-      builder: (context, state) => const PlaceholderPage(title: 'Categories'),
-    ),
-    GoRoute(
-      path: '/category/:categoryName',
-      name: 'category-detail',
-      builder: (context, state) {
-        final categoryName = state.pathParameters['categoryName'] ?? '';
-        return PlaceholderPage(title: 'Category: $categoryName');
-      },
-    ),
-    GoRoute(
-      path: '/nearby-deals',
-      name: 'nearby-deals',
-      builder: (context, state) => const PlaceholderPage(title: 'Nearby Deals'),
-    ),
-    GoRoute(
-      path: '/qr-scanner',
-      name: 'qr-scanner',
-      builder: (context, state) => const PlaceholderPage(title: 'QR Scanner'),
-    ),
-    GoRoute(
-      path: '/shopping-list',
-      name: 'shopping-list',
-      builder: (context, state) =>
-          const PlaceholderPage(title: 'Shopping List'),
+      builder: (context, state) => const Scaffold(
+        body: Center(child: Text('Categories Page - Coming Soon')),
+      ),
     ),
 
-    // Error Route
+    // Category Detail
     GoRoute(
-      path: '/error',
-      name: 'error',
+      path: '/category/:categoryId',
+      name: 'category-detail',
       builder: (context, state) {
-        final message = state.uri.queryParameters['message'] ?? 'Unknown error';
-        return _buildErrorPage(context, state, message);
+        final categoryId = state.pathParameters['categoryId']!;
+        return Scaffold(
+          body: Center(child: Text('Category: $categoryId - Coming Soon')),
+        );
       },
+    ),
+
+    // Store Detail
+    GoRoute(
+      path: '/store/:storeId',
+      name: 'store-detail',
+      builder: (context, state) {
+        final storeId = state.pathParameters['storeId']!;
+        return Scaffold(
+          body: Center(child: Text('Store: $storeId - Coming Soon')),
+        );
+      },
+    ),
+
+    // Deal Detail
+    GoRoute(
+      path: '/deal/:dealId',
+      name: 'deal-detail',
+      builder: (context, state) {
+        final dealId = state.pathParameters['dealId']!;
+        return Scaffold(
+          body: Center(child: Text('Deal: $dealId - Coming Soon')),
+        );
+      },
+    ),
+
+    // Profile
+    GoRoute(
+      path: '/profile',
+      name: 'profile',
+      builder: (context, state) => const Scaffold(
+        body: Center(child: Text('Profile Page - Coming Soon')),
+      ),
+    ),
+
+    // Settings
+    GoRoute(
+      path: '/settings',
+      name: 'settings',
+      builder: (context, state) => const Scaffold(
+        body: Center(child: Text('Settings Page - Coming Soon')),
+      ),
     ),
   ];
 }
 
 // ========== ERROR PAGE ==========
-Widget _buildErrorPage(BuildContext context, GoRouterState state,
-    [String? error]) {
+Widget _buildErrorPage(BuildContext context, GoRouterState state) {
   return Scaffold(
-    body: Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(32),
+    appBar: AppBar(
+      title: const Text('Error'),
+      backgroundColor: Colors.red,
+      foregroundColor: Colors.white,
+    ),
+    body: Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
+          const Icon(
             Icons.error_outline,
-            size: 96,
-            color: Colors.grey[400],
+            size: 64,
+            color: Colors.red,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Page Not Found',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'The page "${state.uri}" could not be found.',
+            style: Theme.of(context).textTheme.bodyMedium,
+            textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
-          Text(
-            'Something went wrong',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            error ?? 'Page not found or an error occurred.',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Colors.grey[600],
-                ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 32),
-          ElevatedButton.icon(
-            onPressed: () {
-              context.go('/home');
-            },
-            icon: const Icon(Icons.home),
-            label: const Text('Go Home'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2196F3),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 12,
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          TextButton(
-            onPressed: () {
-              if (context.canPop()) {
-                context.pop();
-              } else {
-                context.go('/home');
-              }
-            },
-            child: const Text('Go Back'),
+          ElevatedButton(
+            onPressed: () => context.go('/home'),
+            child: const Text('Go Home'),
           ),
         ],
       ),
     ),
   );
-}
-
-// ========== PLACEHOLDER PAGE ==========
-class PlaceholderPage extends StatelessWidget {
-  final String title;
-
-  const PlaceholderPage({super.key, required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        backgroundColor: const Color(0xFF2196F3),
-        foregroundColor: Colors.white,
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.construction,
-              size: 64,
-              color: Colors.grey[400],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              '$title Page',
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Coming Soon!',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () => context.pop(),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2196F3),
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Go Back'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

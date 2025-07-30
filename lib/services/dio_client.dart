@@ -1,13 +1,14 @@
 // lib/services/dio_client.dart - Updated
 import 'package:dio/dio.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'storage_service.dart';
 
 final dioClientProvider = Provider((ref) => DioClient());
 
 class DioClient {
-  static const String baseUrl =
-      'https://your-backend-url.com'; // Update this URL
+  final baseUrl = '${dotenv.env['ENDPOINT']}';
+  // Update this URL
   late Dio dio;
 
   DioClient() {
@@ -37,9 +38,9 @@ class DioClient {
 
           // Add user email from Firebase if available
           final userEmail = await StorageService.getUserEmail();
-          // if (userEmail != null  && user.email.isNotEmpty) {
-          //   options.headers['X-User-Email'] = userEmail;
-          // }
+          if (userEmail != null && userEmail.isNotEmpty) {
+            options.headers['X-User-Email'] = userEmail;
+          }
 
           print('🚀 ${options.method} ${options.path}');
           handler.next(options);

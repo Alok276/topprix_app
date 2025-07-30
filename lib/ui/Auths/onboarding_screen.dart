@@ -1,8 +1,8 @@
-// lib/ui/screens/onboarding_screen.dart
+// lib/ui/Auths/onboarding_screen.dart - FIXED VERSION
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../services/storage_service.dart';
+import 'package:topprix/provider/app_state.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -12,173 +12,277 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 }
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
-  final PageController _pageController = PageController();
+  late PageController _pageController;
   int _currentPage = 0;
+  bool _isLastPage = false;
+
+  final List<OnboardingPage> _pages = [
+    OnboardingPage(
+      image: Icons.local_offer,
+      title: 'Discover Amazing Deals',
+      description:
+          'Find the best discounts and offers from your favorite stores all in one place.',
+      gradient: const LinearGradient(
+        colors: [Color(0xFF2196F3), Color(0xFF21CBF3)],
+      ),
+    ),
+    OnboardingPage(
+      image: Icons.location_on,
+      title: 'Find Nearby Stores',
+      description:
+          'Locate stores near you and never miss out on local deals and promotions.',
+      gradient: const LinearGradient(
+        colors: [Color(0xFF4CAF50), Color(0xFF8BC34A)],
+      ),
+    ),
+    OnboardingPage(
+      image: Icons.notifications_active,
+      title: 'Get Instant Notifications',
+      description:
+          'Be the first to know about flash sales, new coupons, and exclusive offers.',
+      gradient: const LinearGradient(
+        colors: [Color(0xFFFF9800), Color(0xFFFFB74D)],
+      ),
+    ),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+  }
+
+  void _onPageChanged(int page) {
+    setState(() {
+      _currentPage = page;
+      _isLastPage = page == _pages.length - 1;
+    });
+  }
+
+  void _nextPage() {
+    if (_isLastPage) {
+      _completeOnboarding();
+    } else {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  void _previousPage() {
+    if (_currentPage > 0) {
+      _pageController.previousPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  void _completeOnboarding() async {
+    try {
+      // Mark onboarding as completed
+      await ref.read(appStateProvider.notifier).completeOnboarding();
+
+      if (mounted) {
+        // Navigate to login screen
+        context.go('/auth/login');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to complete onboarding. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _skipOnboarding() {
+    _completeOnboarding();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final appState = ref.watch(appStateProvider);
+
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF2196F3),
-              Color(0xFF1976D2),
-            ],
+      body: Stack(
+        children: [
+          // Page View
+          PageView.builder(
+            controller: _pageController,
+            onPageChanged: _onPageChanged,
+            itemCount: _pages.length,
+            itemBuilder: (context, index) {
+              return _buildPage(_pages[index]);
+            },
           ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Skip Button
-              Align(
-                alignment: Alignment.topRight,
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: TextButton(
-                    onPressed: _completeOnboarding,
-                    child: const Text(
-                      'Skip',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
+
+          // Skip Button
+          if (!_isLastPage)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 16,
+              right: 20,
+              child: TextButton(
+                onPressed: _skipOnboarding,
+                child: const Text(
+                  'Skip',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+
+          // Bottom Controls
+          Positioned(
+            bottom: 60,
+            left: 20,
+            right: 20,
+            child: Column(
+              children: [
+                // Page Indicator
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(
+                    _pages.length,
+                    (index) => Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      width: _currentPage == index ? 24 : 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: _currentPage == index
+                            ? Colors.white
+                            : Colors.white.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(4),
                       ),
                     ),
                   ),
                 ),
-              ),
 
-              // Page View
-              Expanded(
-                child: PageView(
-                  controller: _pageController,
-                  onPageChanged: (index) {
-                    setState(() {
-                      _currentPage = index;
-                    });
-                  },
-                  children: const [
-                    OnboardingPage(
-                      icon: Icons.local_offer,
-                      title: 'Discover Amazing Deals',
-                      description:
-                          'Find the best deals and discounts from your favorite local stores. Save money on everything you love!',
-                      color: Color(0xFF4CAF50),
-                    ),
-                    OnboardingPage(
-                      icon: Icons.savings,
-                      title: 'Save Money Smart',
-                      description:
-                          'Clip digital coupons, create shopping lists, and never miss a great deal. Your savings start here!',
-                      color: Color(0xFFFF9800),
-                    ),
-                    OnboardingPage(
-                      icon: Icons.store,
-                      title: 'Shop Local & Easy',
-                      description:
-                          'Support local businesses while finding amazing deals nearby. Shopping made simple and rewarding!',
-                      color: Color(0xFF9C27B0),
-                    ),
-                  ],
-                ),
-              ),
+                const SizedBox(height: 40),
 
-              // Page Indicators
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                  3,
-                  (index) => AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    width: _currentPage == index ? 24 : 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: _currentPage == index
-                          ? Colors.white
-                          : Colors.white.withOpacity(0.4),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 40),
-
-              // Navigation Buttons
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
+                // Navigation Buttons
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
+                    // Previous Button
                     if (_currentPage > 0)
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () {
-                            _pageController.previousPage(
-                              duration: const Duration(milliseconds: 300),
-                              curve: Curves.easeInOut,
-                            );
-                          },
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.white,
-                            side: const BorderSide(color: Colors.white),
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: const Text('Previous'),
-                        ),
-                      ),
-                    if (_currentPage > 0) const SizedBox(width: 16),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: _currentPage == 2
-                            ? _completeOnboarding
-                            : () {
-                                _pageController.nextPage(
-                                  duration: const Duration(milliseconds: 300),
-                                  curve: Curves.easeInOut,
-                                );
-                              },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: const Color(0xFF2196F3),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 2,
-                        ),
-                        child: Text(
-                          _currentPage == 2 ? 'Get Started' : 'Next',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
+                      TextButton(
+                        onPressed: _previousPage,
+                        child: const Text(
+                          'Previous',
+                          style: TextStyle(
+                            color: Colors.white,
                             fontSize: 16,
                           ),
                         ),
+                      )
+                    else
+                      const SizedBox(width: 80),
+
+                    // Next/Get Started Button
+                    ElevatedButton(
+                      onPressed: appState.isLoading ? null : _nextPage,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor:
+                            _pages[_currentPage].gradient.colors.first,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 32,
+                          vertical: 16,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
                       ),
+                      child: appState.isLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Text(
+                              _isLastPage ? 'Get Started' : 'Next',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                     ),
                   ],
                 ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPage(OnboardingPage page) {
+    return Container(
+      decoration: BoxDecoration(gradient: page.gradient),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(40),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Spacer(),
+
+              // Icon
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  page.image,
+                  size: 80,
+                  color: Colors.white,
+                ),
               ),
 
-              const SizedBox(height: 30),
+              const SizedBox(height: 60),
+
+              // Title
+              Text(
+                page.title,
+                style: const TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  height: 1.2,
+                ),
+                textAlign: TextAlign.center,
+              ),
+
+              const SizedBox(height: 24),
+
+              // Description
+              Text(
+                page.description,
+                style: const TextStyle(
+                  fontSize: 18,
+                  color: Colors.white,
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+
+              const Spacer(),
             ],
           ),
         ),
       ),
     );
-  }
-
-  void _completeOnboarding() async {
-    await StorageService.setBool('onboarding_completed', true);
-    if (mounted) {
-      context.go('/auth/login');
-    }
   }
 
   @override
@@ -188,78 +292,18 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 }
 
-class OnboardingPage extends StatelessWidget {
-  final IconData icon;
+// ========== ONBOARDING PAGE MODEL ==========
+
+class OnboardingPage {
+  final IconData image;
   final String title;
   final String description;
-  final Color color;
+  final LinearGradient gradient;
 
-  const OnboardingPage({
-    Key? key,
-    required this.icon,
+  OnboardingPage({
+    required this.image,
     required this.title,
     required this.description,
-    required this.color,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(40),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Icon with Animation
-          TweenAnimationBuilder(
-            duration: const Duration(milliseconds: 800),
-            tween: Tween<double>(begin: 0, end: 1),
-            builder: (context, double value, child) {
-              return Transform.scale(
-                scale: value,
-                child: Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    icon,
-                    size: 60,
-                    color: Colors.white,
-                  ),
-                ),
-              );
-            },
-          ),
-
-          const SizedBox(height: 40),
-
-          // Title
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-            textAlign: TextAlign.center,
-          ),
-
-          const SizedBox(height: 20),
-
-          // Description
-          Text(
-            description,
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.white.withOpacity(0.9),
-              height: 1.5,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
+    required this.gradient,
+  });
 }

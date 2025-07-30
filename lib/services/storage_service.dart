@@ -1,6 +1,7 @@
-// lib/services/storage_service.dart
+// lib/services/storage_service.dart - COMPLETE VERSION WITH ALL MISSING FUNCTIONS
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:topprix/models/search_result_model.dart';
 import '../models/user_model.dart';
 
 class StorageService {
@@ -9,14 +10,18 @@ class StorageService {
   // Storage keys
   static const String _keyToken = 'auth_token';
   static const String _keyUser = 'user_data';
+  static const String _keyUserEmail = 'user_email';
   static const String _keyOnboardingCompleted = 'onboarding_completed';
   static const String _keyRecentSearches = 'recent_searches';
+  static const String _keySearchHistory = 'search_history';
   static const String _keyFavoriteStores = 'favorite_stores';
   static const String _keyAppPreferences = 'app_preferences';
   static const String _keyNotificationSettings = 'notification_settings';
   static const String _keyLocationPermission = 'location_permission';
+  static const String _keyLastKnownLocation = 'last_known_location';
   static const String _keyThemeMode = 'theme_mode';
   static const String _keyLanguage = 'language';
+  static const String _keyFirstTimeUser = 'first_time_user';
 
   // Initialize SharedPreferences
   static Future<void> init() async {
@@ -76,6 +81,7 @@ class StorageService {
       await _ensureInitialized();
       final userJson = jsonEncode(user.toJson());
       await _prefs!.setString(_keyUser, userJson);
+      await _prefs!.setString(_keyUserEmail, user.email);
       print('User saved successfully: ${user.email}');
     } catch (e) {
       print('Error saving user: $e');
@@ -98,10 +104,21 @@ class StorageService {
     }
   }
 
+  static Future<String?> getUserEmail() async {
+    try {
+      await _ensureInitialized();
+      return _prefs!.getString(_keyUserEmail);
+    } catch (e) {
+      print('Error getting user email: $e');
+      return null;
+    }
+  }
+
   static Future<void> removeUser() async {
     try {
       await _ensureInitialized();
       await _prefs!.remove(_keyUser);
+      await _prefs!.remove(_keyUserEmail);
       print('User removed successfully');
     } catch (e) {
       print('Error removing user: $e');
@@ -114,6 +131,7 @@ class StorageService {
     try {
       await _ensureInitialized();
       await _prefs!.setBool(_keyOnboardingCompleted, true);
+      await _prefs!.setBool(_keyFirstTimeUser, false);
       print('Onboarding marked as completed');
     } catch (e) {
       print('Error completing onboarding: $e');
@@ -130,16 +148,90 @@ class StorageService {
     }
   }
 
-  static bool isFirstTimeUser() {
+  static Future<bool> isFirstTimeUser() async {
     try {
-      return !(_prefs?.getBool(_keyOnboardingCompleted) ?? false);
+      await _ensureInitialized();
+      return _prefs!.getBool(_keyFirstTimeUser) ?? true;
     } catch (e) {
       print('Error checking first time user: $e');
       return true;
     }
   }
 
-  // ========== RECENT SEARCHES ==========
+  // ========== SEARCH HISTORY OPERATIONS ==========
+
+  static Future<void> addToSearchHistory(String query) async {
+    try {
+      await _ensureInitialized();
+      final history = await getSearchHistory();
+
+      // Remove if already exists to avoid duplicates
+      history.removeWhere((item) => item.query == query);
+
+      // Add new search to beginning
+      final newItem = SearchHistoryItem(
+        query: query,
+        timestamp: DateTime.now(),
+        resultCount: 0,
+      );
+      history.insert(0, newItem);
+
+      // Keep only last 50 searches
+      if (history.length > 50) {
+        history.removeRange(50, history.length);
+      }
+
+      // Save back to storage
+      final historyJson = history.map((item) => item.toJson()).toList();
+      await _prefs!.setString(_keySearchHistory, jsonEncode(historyJson));
+      print('Search query added to history: $query');
+    } catch (e) {
+      print('Error adding to search history: $e');
+    }
+  }
+
+  static Future<List<SearchHistoryItem>> getSearchHistory() async {
+    try {
+      await _ensureInitialized();
+      final historyString = _prefs!.getString(_keySearchHistory);
+      if (historyString != null) {
+        final historyList = jsonDecode(historyString) as List;
+        return historyList
+            .map((item) => SearchHistoryItem.fromJson(item))
+            .toList();
+      }
+      return [];
+    } catch (e) {
+      print('Error getting search history: $e');
+      return [];
+    }
+  }
+
+  static Future<void> clearSearchHistory() async {
+    try {
+      await _ensureInitialized();
+      await _prefs!.remove(_keySearchHistory);
+      print('Search history cleared');
+    } catch (e) {
+      print('Error clearing search history: $e');
+    }
+  }
+
+  static Future<void> removeFromSearchHistory(String query) async {
+    try {
+      await _ensureInitialized();
+      final history = await getSearchHistory();
+      history.removeWhere((item) => item.query == query);
+
+      final historyJson = history.map((item) => item.toJson()).toList();
+      await _prefs!.setString(_keySearchHistory, jsonEncode(historyJson));
+      print('Removed from search history: $query');
+    } catch (e) {
+      print('Error removing from search history: $e');
+    }
+  }
+
+  // ========== RECENT SEARCHES (Simple String List) ==========
 
   static Future<void> addRecentSearch(String search) async {
     try {
@@ -184,17 +276,74 @@ class StorageService {
     }
   }
 
+  // ========== LOCATION OPERATIONS ==========
+
+  /// Save last known location
+  static Future<bool> saveLastKnownLocation(
+    double latitude,
+    double longitude,
+  ) async {
+    try {
+      await _ensureInitialized();
+      final locationData = {
+        'latitude': latitude,
+        'longitude': longitude,
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+
+      return await _prefs!.setString(
+        _keyLastKnownLocation,
+        jsonEncode(locationData),
+      );
+    } catch (e) {
+      print('Error saving last known location: $e');
+      return false;
+    }
+  }
+
+  /// Get last known location
+  static Future<Map<String, dynamic>?> getLastKnownLocation() async {
+    try {
+      await _ensureInitialized();
+      final locationString = _prefs!.getString(_keyLastKnownLocation);
+
+      if (locationString != null) {
+        final locationData = jsonDecode(locationString) as Map<String, dynamic>;
+        return {
+          'latitude': locationData['latitude'],
+          'longitude': locationData['longitude'],
+          'timestamp': locationData['timestamp'],
+        };
+      }
+
+      return null;
+    } catch (e) {
+      print('Error getting last known location: $e');
+      return null;
+    }
+  }
+
+  /// Clear last known location
+  static Future<bool> clearLastKnownLocation() async {
+    try {
+      await _ensureInitialized();
+      return await _prefs!.remove(_keyLastKnownLocation);
+    } catch (e) {
+      print('Error clearing last known location: $e');
+      return false;
+    }
+  }
+
   // ========== FAVORITE STORES ==========
 
   static Future<void> addFavoriteStore(String storeId) async {
     try {
       await _ensureInitialized();
       final favorites = await getFavoriteStores();
-
       if (!favorites.contains(storeId)) {
         favorites.add(storeId);
         await _prefs!.setStringList(_keyFavoriteStores, favorites);
-        print('Favorite store added: $storeId');
+        print('Store added to favorites: $storeId');
       }
     } catch (e) {
       print('Error adding favorite store: $e');
@@ -205,11 +354,9 @@ class StorageService {
     try {
       await _ensureInitialized();
       final favorites = await getFavoriteStores();
-
-      if (favorites.remove(storeId)) {
-        await _prefs!.setStringList(_keyFavoriteStores, favorites);
-        print('Favorite store removed: $storeId');
-      }
+      favorites.remove(storeId);
+      await _prefs!.setStringList(_keyFavoriteStores, favorites);
+      print('Store removed from favorites: $storeId');
     } catch (e) {
       print('Error removing favorite store: $e');
     }
@@ -225,12 +372,12 @@ class StorageService {
     }
   }
 
-  static Future<bool> isStoreFavorite(String storeId) async {
+  static Future<bool> isFavoriteStore(String storeId) async {
     try {
       final favorites = await getFavoriteStores();
       return favorites.contains(storeId);
     } catch (e) {
-      print('Error checking if store is favorite: $e');
+      print('Error checking favorite store: $e');
       return false;
     }
   }
@@ -241,8 +388,7 @@ class StorageService {
       Map<String, dynamic> preferences) async {
     try {
       await _ensureInitialized();
-      final prefsJson = jsonEncode(preferences);
-      await _prefs!.setString(_keyAppPreferences, prefsJson);
+      await _prefs!.setString(_keyAppPreferences, jsonEncode(preferences));
       print('App preferences saved');
     } catch (e) {
       print('Error saving app preferences: $e');
@@ -269,8 +415,7 @@ class StorageService {
       Map<String, bool> settings) async {
     try {
       await _ensureInitialized();
-      final settingsJson = jsonEncode(settings);
-      await _prefs!.setString(_keyNotificationSettings, settingsJson);
+      await _prefs!.setString(_keyNotificationSettings, jsonEncode(settings));
       print('Notification settings saved');
     } catch (e) {
       print('Error saving notification settings: $e');
@@ -282,17 +427,15 @@ class StorageService {
       await _ensureInitialized();
       final settingsString = _prefs!.getString(_keyNotificationSettings);
       if (settingsString != null) {
-        final settingsJson = jsonDecode(settingsString) as Map<String, dynamic>;
-        return settingsJson.map((key, value) => MapEntry(key, value as bool));
+        final settings = jsonDecode(settingsString) as Map<String, dynamic>;
+        return settings.map((key, value) => MapEntry(key, value as bool));
       }
-      // Default notification settings
       return {
-        'push_notifications': true,
-        'email_notifications': true,
-        'deal_alerts': true,
-        'price_drop_alerts': true,
-        'new_store_alerts': false,
-        'promotional_emails': false,
+        'deals': true,
+        'price_drops': true,
+        'new_stores': false,
+        'promotions': true,
+        'reminders': true,
       };
     } catch (e) {
       print('Error getting notification settings: $e');
@@ -300,104 +443,12 @@ class StorageService {
     }
   }
 
-  // ========== GENERIC METHODS ==========
+  // ========== THEME AND LANGUAGE ==========
 
-  static Future<void> setBool(String key, bool value) async {
+  static Future<void> setThemeMode(String mode) async {
     try {
       await _ensureInitialized();
-      await _prefs!.setBool(key, value);
-    } catch (e) {
-      print('Error setting bool $key: $e');
-    }
-  }
-
-  static bool getBool(String key, {bool defaultValue = false}) {
-    try {
-      return _prefs?.getBool(key) ?? defaultValue;
-    } catch (e) {
-      print('Error getting bool $key: $e');
-      return defaultValue;
-    }
-  }
-
-  static Future<void> setString(String key, String value) async {
-    try {
-      await _ensureInitialized();
-      await _prefs!.setString(key, value);
-    } catch (e) {
-      print('Error setting string $key: $e');
-    }
-  }
-
-  static String? getString(String key, {String? defaultValue}) {
-    try {
-      return _prefs?.getString(key) ?? defaultValue;
-    } catch (e) {
-      print('Error getting string $key: $e');
-      return defaultValue;
-    }
-  }
-
-  static Future<void> setInt(String key, int value) async {
-    try {
-      await _ensureInitialized();
-      await _prefs!.setInt(key, value);
-    } catch (e) {
-      print('Error setting int $key: $e');
-    }
-  }
-
-  static int getInt(String key, {int defaultValue = 0}) {
-    try {
-      return _prefs?.getInt(key) ?? defaultValue;
-    } catch (e) {
-      print('Error getting int $key: $e');
-      return defaultValue;
-    }
-  }
-
-  static Future<void> setDouble(String key, double value) async {
-    try {
-      await _ensureInitialized();
-      await _prefs!.setDouble(key, value);
-    } catch (e) {
-      print('Error setting double $key: $e');
-    }
-  }
-
-  static double getDouble(String key, {double defaultValue = 0.0}) {
-    try {
-      return _prefs?.getDouble(key) ?? defaultValue;
-    } catch (e) {
-      print('Error getting double $key: $e');
-      return defaultValue;
-    }
-  }
-
-  static Future<void> setStringList(String key, List<String> value) async {
-    try {
-      await _ensureInitialized();
-      await _prefs!.setStringList(key, value);
-    } catch (e) {
-      print('Error setting string list $key: $e');
-    }
-  }
-
-  static List<String> getStringList(String key, {List<String>? defaultValue}) {
-    try {
-      return _prefs?.getStringList(key) ?? defaultValue ?? [];
-    } catch (e) {
-      print('Error getting string list $key: $e');
-      return defaultValue ?? [];
-    }
-  }
-
-  // ========== THEME AND LOCALE ==========
-
-  static Future<void> setThemeMode(String themeMode) async {
-    try {
-      await _ensureInitialized();
-      await _prefs!.setString(_keyThemeMode, themeMode);
+      await _prefs!.setString(_keyThemeMode, mode);
     } catch (e) {
       print('Error setting theme mode: $e');
     }
@@ -450,6 +501,65 @@ class StorageService {
     }
   }
 
+  // ========== GENERIC OPERATIONS ==========
+
+  static Future<void> setString(String key, String value) async {
+    try {
+      await _ensureInitialized();
+      await _prefs!.setString(key, value);
+    } catch (e) {
+      print('Error setting string for key $key: $e');
+    }
+  }
+
+  static Future<String?> getString(String key) async {
+    try {
+      await _ensureInitialized();
+      return _prefs!.getString(key);
+    } catch (e) {
+      print('Error getting string for key $key: $e');
+      return null;
+    }
+  }
+
+  static Future<void> setBool(String key, bool value) async {
+    try {
+      await _ensureInitialized();
+      await _prefs!.setBool(key, value);
+    } catch (e) {
+      print('Error setting bool for key $key: $e');
+    }
+  }
+
+  static Future<bool> getBool(String key, {bool defaultValue = false}) async {
+    try {
+      await _ensureInitialized();
+      return _prefs!.getBool(key) ?? defaultValue;
+    } catch (e) {
+      print('Error getting bool for key $key: $e');
+      return defaultValue;
+    }
+  }
+
+  static Future<void> setInt(String key, int value) async {
+    try {
+      await _ensureInitialized();
+      await _prefs!.setInt(key, value);
+    } catch (e) {
+      print('Error setting int for key $key: $e');
+    }
+  }
+
+  static Future<int> getInt(String key, {int defaultValue = 0}) async {
+    try {
+      await _ensureInitialized();
+      return _prefs!.getInt(key) ?? defaultValue;
+    } catch (e) {
+      print('Error getting int for key $key: $e');
+      return defaultValue;
+    }
+  }
+
   // ========== CLEAR ALL DATA ==========
 
   static Future<void> clearAll() async {
@@ -469,7 +579,9 @@ class StorageService {
       // Remove user-specific data but keep app preferences
       await _prefs!.remove(_keyToken);
       await _prefs!.remove(_keyUser);
+      await _prefs!.remove(_keyUserEmail);
       await _prefs!.remove(_keyFavoriteStores);
+      await _prefs!.remove(_keySearchHistory);
       await _prefs!.remove(_keyRecentSearches);
 
       print('User data cleared');
@@ -502,6 +614,16 @@ class StorageService {
     } catch (e) {
       print('Error checking key $key: $e');
       return false;
+    }
+  }
+
+  static Future<void> removeKey(String key) async {
+    try {
+      await _ensureInitialized();
+      await _prefs!.remove(key);
+      print('Key removed: $key');
+    } catch (e) {
+      print('Error removing key $key: $e');
     }
   }
 }
