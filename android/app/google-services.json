@@ -7,12 +7,20 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:149519171356:android:65fe866a772f8d059f04d9",
+        "mobilesdk_app_id": "1:149519171356:android:f2ac016a403381bb9f04d9",
         "android_client_info": {
           "package_name": "com.kliklokal.topprix"
         }
       },
       "oauth_client": [
+        {
+          "client_id": "149519171356-upgc3qt1v1s8h0a3vqngqkn7husv3pmm.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.kliklokal.topprix",
+            "certificate_hash": "73850dda830a2e0733cd624c9d40e52ba44d4a91"
+          }
+        },
         {
           "client_id": "149519171356-1pmor67mmgtm5qbqkmopb45fis4hlkg4.apps.googleusercontent.com",
           "client_type": 3
