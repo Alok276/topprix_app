@@ -4,9 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:topprix/features/auth/service/backend_user_service.dart';
-// Import your backend service
-// import 'backend_user_service.dart';
 
 // User Role Enum
 enum UserRole { user, retailer }
@@ -83,6 +82,7 @@ class AuthState {
   final BackendUser? backendUser;
   final bool isLoading;
   final String? error;
+  final bool isInitialized;
 
   AuthState({
     this.firebaseUser,
@@ -90,6 +90,7 @@ class AuthState {
     this.backendUser,
     this.isLoading = false,
     this.error,
+    this.isInitialized = false,
   });
 
   AuthState copyWith({
@@ -98,6 +99,7 @@ class AuthState {
     BackendUser? backendUser,
     bool? isLoading,
     String? error,
+    bool? isInitialized,
   }) {
     return AuthState(
       firebaseUser: firebaseUser ?? this.firebaseUser,
@@ -105,10 +107,12 @@ class AuthState {
       backendUser: backendUser ?? this.backendUser,
       isLoading: isLoading ?? this.isLoading,
       error: error,
+      isInitialized: isInitialized ?? this.isInitialized,
     );
   }
 
-  bool get isAuthenticated => firebaseUser != null && backendUser != null;
+  bool get isAuthenticated =>
+      isInitialized && firebaseUser != null && backendUser != null;
   bool get isRetailer => backendUser?.role == 'RETAILER';
   bool get isCustomer => backendUser?.role == 'USER';
 }
@@ -121,55 +125,147 @@ class TopPrixAuthService extends StateNotifier<AuthState> {
   final FirebaseStorage _firebaseStorage = FirebaseStorage.instance;
   final BackendUserService _backendService = BackendUserService();
 
-  TopPrixAuthService() : super(AuthState()) {
-    // Listen to auth state changes
-    _firebaseAuth.authStateChanges().listen(_onAuthStateChanged);
+  static const String _userEmailKey = 'user_email';
+  static const String _userRoleKey = 'user_role';
+  static const String _isLoggedInKey = 'is_logged_in';
+
+  TopPrixAuthService() : super(AuthState(isLoading: true)) {
+    _initializeAuth();
   }
 
-  // Auth state change listener
-  Future<void> _onAuthStateChanged(User? firebaseUser) async {
-    if (firebaseUser != null) {
-      try {
-        state = state.copyWith(isLoading: true);
+  // Initialize authentication state
+  Future<void> _initializeAuth() async {
+    try {
+      print('🔄 Initializing authentication...');
 
-        // Get user data from backend
-        final backendResponse =
-            await _backendService.getUser(email: firebaseUser.email!);
+      // Check if Firebase Auth has a current user
+      final currentUser = _firebaseAuth.currentUser;
 
-        if (backendResponse.success && backendResponse.data != null) {
-          // Also get Firestore data as backup
-          final topPrixUser = await _getTopPrixUser(firebaseUser.uid);
+      if (currentUser != null) {
+        print('👤 Found Firebase user: ${currentUser.email}');
 
-          state = state.copyWith(
-            firebaseUser: firebaseUser,
-            backendUser: backendResponse.data,
-            topPrixUser: topPrixUser,
-            isLoading: false,
-            error: null,
-          );
+        // Check SharedPreferences for additional validation
+        final prefs = await SharedPreferences.getInstance();
+        final isLoggedIn = prefs.getBool(_isLoggedInKey) ?? false;
+        final storedEmail = prefs.getString(_userEmailKey);
+
+        if (isLoggedIn && storedEmail == currentUser.email) {
+          print('✅ User session is valid, loading user data...');
+          await _loadUserData(currentUser);
         } else {
-          // User not found in backend, might be a Google sign-in user
-          state = state.copyWith(
-            firebaseUser: firebaseUser,
-            backendUser: null,
-            isLoading: false,
-            error: 'User not found in backend',
-          );
+          print('⚠️ Session validation failed, signing out...');
+          await _clearUserSession();
         }
-      } catch (e) {
+      } else {
+        print('❌ No Firebase user found');
+        await _clearUserSession();
+        state = state.copyWith(isLoading: false, isInitialized: true);
+      }
+
+      // Set up auth state listener for future changes
+      _firebaseAuth.authStateChanges().listen(_onAuthStateChanged);
+    } catch (e) {
+      print('❌ Auth initialization error: $e');
+      await _clearUserSession();
+      state = state.copyWith(
+          isLoading: false,
+          isInitialized: true,
+          error: 'Failed to initialize authentication');
+    }
+  }
+
+  // Load user data from backend and Firestore
+  Future<void> _loadUserData(User firebaseUser) async {
+    try {
+      print('📡 Loading user data for: ${firebaseUser.email}');
+
+      // Get user data from backend
+      final backendResponse =
+          await _backendService.getUser(email: firebaseUser.email!);
+
+      if (backendResponse.success && backendResponse.data != null) {
+        // Get Firestore data as backup
+        final topPrixUser = await _getTopPrixUser(firebaseUser.uid);
+
+        // Save user session
+        await _saveUserSession(
+          email: firebaseUser.email!,
+          role: backendResponse.data!.role,
+        );
+
+        state = state.copyWith(
+          firebaseUser: firebaseUser,
+          backendUser: backendResponse.data,
+          topPrixUser: topPrixUser,
+          isLoading: false,
+          isInitialized: true,
+          error: null,
+        );
+
+        print('✅ User data loaded successfully');
+      } else {
+        print('❌ Backend user not found');
+        await _clearUserSession();
         state = state.copyWith(
           firebaseUser: firebaseUser,
           backendUser: null,
           isLoading: false,
-          error: e.toString(),
+          isInitialized: true,
+          error: 'User not found in backend',
         );
       }
-    } else {
-      state = AuthState();
+    } catch (e) {
+      print('❌ Error loading user data: $e');
+      await _clearUserSession();
+      state = state.copyWith(
+        firebaseUser: firebaseUser,
+        backendUser: null,
+        isLoading: false,
+        isInitialized: true,
+        error: e.toString(),
+      );
     }
   }
 
-  // Get TopPrix user data from Firestore (backup storage)
+  // Auth state change listener (for real-time updates)
+  Future<void> _onAuthStateChanged(User? firebaseUser) async {
+    // Skip if this is the initial load (handled by _initializeAuth)
+    if (!state.isInitialized) return;
+
+    print('🔄 Auth state changed: ${firebaseUser?.email ?? 'null'}');
+
+    if (firebaseUser != null && state.firebaseUser?.uid != firebaseUser.uid) {
+      // New user signed in, load their data
+      await _loadUserData(firebaseUser);
+    } else if (firebaseUser == null && state.firebaseUser != null) {
+      // User signed out
+      await _clearUserSession();
+      state = AuthState(isInitialized: true);
+    }
+  }
+
+  // Save user session to SharedPreferences
+  Future<void> _saveUserSession({
+    required String email,
+    required String role,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_isLoggedInKey, true);
+    await prefs.setString(_userEmailKey, email);
+    await prefs.setString(_userRoleKey, role);
+    print('💾 User session saved');
+  }
+
+  // Clear user session from SharedPreferences
+  Future<void> _clearUserSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_isLoggedInKey);
+    await prefs.remove(_userEmailKey);
+    await prefs.remove(_userRoleKey);
+    print('🗑️ User session cleared');
+  }
+
+  // Get TopPrix user data from Firestore
   Future<TopPrixUser?> _getTopPrixUser(String uid) async {
     try {
       final doc = await _firestore.collection('users').doc(uid).get();
@@ -183,7 +279,7 @@ class TopPrixAuthService extends StateNotifier<AuthState> {
     }
   }
 
-  // Sign up with email and password - COMPLETE BACKEND INTEGRATION
+  // Sign up with email and password
   Future<void> signUpWithEmailAndPassword({
     required String email,
     required String password,
@@ -197,7 +293,7 @@ class TopPrixAuthService extends StateNotifier<AuthState> {
 
       print('🚀 Starting signup process for: $email');
 
-      // STEP 1: Create Firebase user first
+      // Create Firebase user
       final userCredential = await _firebaseAuth.createUserWithEmailAndPassword(
         email: email,
         password: password,
@@ -209,10 +305,10 @@ class TopPrixAuthService extends StateNotifier<AuthState> {
 
       print('✅ Firebase user created: ${userCredential.user!.uid}');
 
-      // STEP 2: Update Firebase display name
+      // Update Firebase display name
       await userCredential.user!.updateDisplayName(name);
 
-      // STEP 3: Register user in backend API
+      // Register user in backend
       print('📡 Registering user in backend...');
       final backendResponse = await _backendService.registerUser(
         email: email,
@@ -223,15 +319,13 @@ class TopPrixAuthService extends StateNotifier<AuthState> {
       );
 
       if (!backendResponse.success) {
-        // If backend registration fails, delete Firebase user to maintain consistency
-        print('❌ Backend registration failed, cleaning up Firebase user...');
         await userCredential.user!.delete();
         throw Exception(backendResponse.message);
       }
 
       print('✅ Backend user created successfully');
 
-      // STEP 4: Create TopPrix user document in Firestore as backup
+      // Create Firestore backup
       final topPrixUser = TopPrixUser(
         id: userCredential.user!.uid,
         email: email,
@@ -250,30 +344,31 @@ class TopPrixAuthService extends StateNotifier<AuthState> {
           .doc(userCredential.user!.uid)
           .set(topPrixUser.toFirestore());
 
-      print('✅ Firestore backup created');
+      // Save user session
+      await _saveUserSession(
+        email: email,
+        role: backendResponse.data!.role,
+      );
 
-      // STEP 5: Update state with all user data
       state = state.copyWith(
         firebaseUser: userCredential.user,
         backendUser: backendResponse.data,
         topPrixUser: topPrixUser,
         isLoading: false,
+        isInitialized: true,
       );
 
-      print(
-          '🎉 Signup completed successfully for ${role == UserRole.user ? 'Customer' : 'Retailer'}');
+      print('🎉 Signup completed successfully');
     } on FirebaseAuthException catch (e) {
-      print('❌ Firebase Auth error: ${e.code}');
       state = state.copyWith(isLoading: false, error: _getAuthErrorMessage(e));
       throw Exception(_getAuthErrorMessage(e));
     } catch (e) {
-      print('❌ Signup error: $e');
       state = state.copyWith(isLoading: false, error: e.toString());
       throw Exception(e.toString());
     }
   }
 
-  // Sign in with email and password - BACKEND ROLE CHECKING
+  // Sign in with email and password
   Future<void> signInWithEmailAndPassword({
     required String email,
     required String password,
@@ -283,7 +378,7 @@ class TopPrixAuthService extends StateNotifier<AuthState> {
 
       print('🔐 Starting login process for: $email');
 
-      // STEP 1: Sign in with Firebase
+      // Sign in with Firebase
       final userCredential = await _firebaseAuth.signInWithEmailAndPassword(
         email: email,
         password: password,
@@ -295,69 +390,46 @@ class TopPrixAuthService extends StateNotifier<AuthState> {
 
       print('✅ Firebase authentication successful');
 
-      // STEP 2: Get user data from backend (this contains the role!)
-      print('📡 Fetching user data from backend...');
-      final backendResponse = await _backendService.getUser(email: email);
+      // Load user data (this will save session if successful)
+      await _loadUserData(userCredential.user!);
 
-      if (!backendResponse.success || backendResponse.data == null) {
-        // User exists in Firebase but not in backend - data inconsistency
+      if (state.backendUser == null) {
         await _firebaseAuth.signOut();
         throw Exception('User account not found. Please contact support.');
       }
 
-      print('✅ Backend user data retrieved');
-      print('👤 User role: ${backendResponse.data!.role}');
-
-      // STEP 3: Get Firestore backup data (optional)
-      final topPrixUser = await _getTopPrixUser(userCredential.user!.uid);
-
-      // STEP 4: Update state - navigation will be handled by UI based on role
-      state = state.copyWith(
-        firebaseUser: userCredential.user,
-        backendUser: backendResponse.data,
-        topPrixUser: topPrixUser,
-        isLoading: false,
-      );
-
-      print(
-          '🎉 Login completed successfully for ${backendResponse.data!.role}');
+      print('🎉 Login completed successfully');
     } on FirebaseAuthException catch (e) {
-      print('❌ Firebase Auth error: ${e.code}');
       state = state.copyWith(isLoading: false, error: _getAuthErrorMessage(e));
       throw Exception(_getAuthErrorMessage(e));
     } catch (e) {
-      print('❌ Login error: $e');
       state = state.copyWith(isLoading: false, error: e.toString());
       throw Exception(e.toString());
     }
   }
 
-  // Sign in with Google (Customer only) - BACKEND SYNC
+  // Sign in with Google
   Future<void> signInWithGoogle() async {
     try {
       state = state.copyWith(isLoading: true, error: null);
 
       print('🔐 Starting Google Sign-In...');
 
-      // Begin Google sign in flow
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
 
       if (googleUser == null) {
         state = state.copyWith(isLoading: false);
-        return; // User cancelled the sign-in
+        return;
       }
 
-      // Get authentication details
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
 
-      // Create Firebase credential
       final AuthCredential credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      // Sign in with Firebase
       final userCredential =
           await _firebaseAuth.signInWithCredential(credential);
 
@@ -367,21 +439,18 @@ class TopPrixAuthService extends StateNotifier<AuthState> {
 
       print('✅ Google Sign-In successful');
 
-      // Sync with backend (create if doesn't exist, get if exists)
-      print('📡 Syncing with backend...');
+      // Sync with backend
       final backendResponse = await _backendService.syncFirebaseUser(
         email: userCredential.user!.email!,
         name: userCredential.user!.displayName ?? 'Google User',
-        role: 'USER', // Google sign-in defaults to customer
+        role: 'USER',
       );
 
       if (!backendResponse.success) {
         throw Exception(backendResponse.message);
       }
 
-      print('✅ Backend sync completed');
-
-      // Update/Create Firestore backup
+      // Create/update Firestore backup
       final topPrixUser = TopPrixUser(
         id: userCredential.user!.uid,
         email: userCredential.user!.email!,
@@ -399,20 +468,25 @@ class TopPrixAuthService extends StateNotifier<AuthState> {
           .doc(userCredential.user!.uid)
           .set(topPrixUser.toFirestore(), SetOptions(merge: true));
 
+      // Save user session
+      await _saveUserSession(
+        email: userCredential.user!.email!,
+        role: 'USER',
+      );
+
       state = state.copyWith(
         firebaseUser: userCredential.user,
         backendUser: backendResponse.data,
         topPrixUser: topPrixUser,
         isLoading: false,
+        isInitialized: true,
       );
 
       print('🎉 Google Sign-In completed successfully');
     } on FirebaseAuthException catch (e) {
-      print('❌ Google Sign-In Firebase error: ${e.code}');
       state = state.copyWith(isLoading: false, error: _getAuthErrorMessage(e));
       throw Exception(_getAuthErrorMessage(e));
     } catch (e) {
-      print('❌ Google Sign-In error: $e');
       state = state.copyWith(isLoading: false, error: e.toString());
       throw Exception(e.toString());
     }
@@ -422,9 +496,7 @@ class TopPrixAuthService extends StateNotifier<AuthState> {
   Future<void> sendPasswordResetEmail({required String email}) async {
     try {
       state = state.copyWith(isLoading: true, error: null);
-
       await _firebaseAuth.sendPasswordResetEmail(email: email);
-
       state = state.copyWith(isLoading: false);
     } on FirebaseAuthException catch (e) {
       state = state.copyWith(isLoading: false, error: _getAuthErrorMessage(e));
@@ -445,7 +517,9 @@ class TopPrixAuthService extends StateNotifier<AuthState> {
         _googleSignIn.signOut(),
       ]);
 
-      state = AuthState();
+      await _clearUserSession();
+
+      state = AuthState(isInitialized: true);
       print('👋 User signed out successfully');
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -500,7 +574,6 @@ class TopPrixAuthService extends StateNotifier<AuthState> {
       // Update Firestore backup
       await _firestore.collection('users').doc(user.uid).update(updates);
 
-      // Update state with backend data
       state = state.copyWith(
         backendUser: backendResponse.data,
         isLoading: false,
@@ -564,7 +637,32 @@ class TopPrixAuthService extends StateNotifier<AuthState> {
     final user = _firebaseAuth.currentUser;
     if (user != null) {
       await user.reload();
-      await _onAuthStateChanged(_firebaseAuth.currentUser);
+      await _loadUserData(_firebaseAuth.currentUser!);
+    }
+  }
+
+  // Force refresh user data
+  Future<void> refreshUserData() async {
+    final user = state.firebaseUser;
+    if (user != null) {
+      await _loadUserData(user);
+    }
+  }
+
+  // Check session validity
+  Future<bool> isSessionValid() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final isLoggedIn = prefs.getBool(_isLoggedInKey) ?? false;
+      final storedEmail = prefs.getString(_userEmailKey);
+      final currentUser = _firebaseAuth.currentUser;
+
+      return isLoggedIn &&
+          storedEmail != null &&
+          currentUser != null &&
+          storedEmail == currentUser.email;
+    } catch (e) {
+      return false;
     }
   }
 
@@ -581,7 +679,6 @@ final topPrixAuthProvider =
     StateNotifierProvider<TopPrixAuthService, AuthState>((ref) {
   final service = TopPrixAuthService();
 
-  // Dispose when provider is disposed
   ref.onDispose(() {
     service.dispose();
   });
@@ -620,4 +717,8 @@ final authLoadingProvider = Provider<bool>((ref) {
 
 final authErrorProvider = Provider<String?>((ref) {
   return ref.watch(topPrixAuthProvider).error;
+});
+
+final authInitializedProvider = Provider<bool>((ref) {
+  return ref.watch(topPrixAuthProvider).isInitialized;
 });

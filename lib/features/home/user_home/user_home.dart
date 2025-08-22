@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:topprix/features/auth/service/auth_service.dart';
-import 'package:topprix/features/auth/service/backend_user_service.dart';
+import 'package:topprix/features/home/user_home/home_dashboard_tab.dart';
+import 'package:topprix/features/home/user_home/search_page.dart';
 import 'package:topprix/features/home/user_home/tabs/coupons.dart';
 import 'package:topprix/features/home/user_home/tabs/flyer.dart';
+import 'package:topprix/features/home/user_home/tabs/notifications_page.dart';
+import 'package:topprix/features/home/user_home/tabs/saved.dart';
+import 'package:topprix/features/home/user_home/profile_page.dart';
 import 'package:topprix/features/home/user_home/tabs/stores.dart';
 
 class UserHomePage extends ConsumerStatefulWidget {
@@ -21,7 +25,14 @@ class _UserHomePageState extends ConsumerState<UserHomePage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging) {
+        setState(() {
+          _currentIndex = _tabController.index;
+        });
+      }
+    });
   }
 
   @override
@@ -38,44 +49,23 @@ class _UserHomePageState extends ConsumerState<UserHomePage>
       appBar: _buildAppBar(user),
       body: _buildBody(),
       bottomNavigationBar: _buildBottomNavigation(),
-      floatingActionButton: _buildFloatingActionButton(),
+      floatingActionButton:
+          _currentIndex == 0 ? _buildFloatingActionButton() : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
-  // ============================================================================
-  // 3. APP BAR WITH USER INFO & NOTIFICATIONS
-  // ============================================================================
-
-  PreferredSizeWidget _buildAppBar(BackendUser? user) {
+  PreferredSizeWidget _buildAppBar(dynamic user) {
     return AppBar(
       elevation: 0,
       backgroundColor: const Color(0xFF6366F1),
       foregroundColor: Colors.white,
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Welcome ${user?.name?.split(' ').first ?? 'User'}',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          if (user?.location != null)
-            Text(
-              user!.location!,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w400,
-              ),
-            ),
-        ],
-      ),
+      title: _buildAppBarTitle(user),
       actions: [
         // Search button
         IconButton(
           icon: const Icon(Icons.search),
-          onPressed: () => Navigator.pushNamed(context, '/search'),
+          onPressed: () => _navigateToSearch(),
         ),
         // Notifications
         IconButton(
@@ -96,538 +86,316 @@ class _UserHomePageState extends ConsumerState<UserHomePage>
               ),
             ],
           ),
-          onPressed: () => Navigator.pushNamed(context, '/notifications'),
+          onPressed: () => _navigateToNotifications(),
         ),
-        // Profile
+        // Profile button (moved from tab to app bar)
         IconButton(
-          icon: const Icon(Icons.person_outline),
-          // icon: CircleAvatar(
-          //   radius: 16,
-          //   backgroundImage: user?.profilePicture != null
-          //       ? NetworkImage(user!.profilePicture!)
-          //       : null,
-          //   child: user?.profilePicture == null
-          //       ? Text(
-          //           user?.name?.substring(0, 1).toUpperCase() ?? 'U',
-          //           style: const TextStyle(fontSize: 14),
-          //         )
-          //       : null,
-          // ),
-          onPressed: () => Navigator.pushNamed(context, '/profile'),
+          icon: CircleAvatar(
+            radius: 16,
+            backgroundColor: Colors.white.withOpacity(0.2),
+            child: Text(
+              user?.name?.substring(0, 1).toUpperCase() ?? 'U',
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          onPressed: () => _navigateToProfile(),
         ),
+        const SizedBox(width: 8),
       ],
     );
   }
 
-  // ============================================================================
-  // 4. MAIN BODY WITH TAB CONTROLLER
-  // ============================================================================
+  Widget _buildAppBarTitle(dynamic user) {
+    switch (_currentIndex) {
+      case 0:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Welcome ${user?.name?.split(' ').first ?? 'User'}',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (user?.location != null)
+              Text(
+                user!.location!,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+          ],
+        );
+      case 1:
+        return const Text('Flyers');
+      case 2:
+        return const Text('Coupons');
+      case 3:
+        return const Text('Stores');
+      case 4:
+        return const Text('Saved');
+      default:
+        return const Text('TopPrix');
+    }
+  }
 
   Widget _buildBody() {
     return TabBarView(
       controller: _tabController,
+      physics: const NeverScrollableScrollPhysics(), // Disable swipe
       children: const [
-        HomeTab(), // Featured flyers, nearby deals
-        FlyersTab(), // All flyers with filters
-        CouponsTab(), // All coupons with save functionality
-        StoresTab(), // Store listings
-        //SavedTab(),          // Saved items, shopping lists, wishlist
+        HomeDashboardTab(), // Enhanced dashboard
+        FlyersTab(), // Your existing flyers tab
+        CouponsTab(), // Your existing coupons tab
+        StoresTab(), // Your existing stores tab
+        SavedTab(), // New saved items tab
       ],
     );
   }
-
-  // ============================================================================
-  // 5. BOTTOM NAVIGATION
-  // ============================================================================
 
   Widget _buildBottomNavigation() {
-    return BottomNavigationBar(
-      type: BottomNavigationBarType.fixed,
-      currentIndex: _currentIndex,
-      selectedItemColor: const Color(0xFF6366F1),
-      unselectedItemColor: Colors.grey[600],
-      onTap: (index) {
-        setState(() {
-          _currentIndex = index;
-          _tabController.animateTo(index);
-        });
-      },
-      items: const [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.home_outlined),
-          activeIcon: Icon(Icons.home),
-          label: 'Home',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.local_offer_outlined),
-          activeIcon: Icon(Icons.local_offer),
-          label: 'Flyers',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.confirmation_number_outlined),
-          activeIcon: Icon(Icons.confirmation_number),
-          label: 'Coupons',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.store_outlined),
-          activeIcon: Icon(Icons.store),
-          label: 'Stores',
-        ),
-        // BottomNavigationBarItem(
-        //   icon: Icon(Icons.bookmark_outline),
-        //   activeIcon: Icon(Icons.bookmark),
-        //   label: 'Saved',
-        // ),
-      ],
+    return Container(
+      decoration: BoxDecoration(
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 20,
+            offset: const Offset(0, -5),
+          ),
+        ],
+      ),
+      child: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        currentIndex: _currentIndex,
+        selectedItemColor: const Color(0xFF6366F1),
+        unselectedItemColor: Colors.grey[600],
+        selectedFontSize: 12,
+        unselectedFontSize: 12,
+        backgroundColor: Colors.white,
+        elevation: 0,
+        onTap: (index) {
+          setState(() {
+            _currentIndex = index;
+            _tabController.animateTo(index);
+          });
+        },
+        items: [
+          BottomNavigationBarItem(
+            icon: _buildNavIcon(Icons.home_outlined, Icons.home, 0),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon:
+                _buildNavIcon(Icons.local_offer_outlined, Icons.local_offer, 1),
+            label: 'Flyers',
+          ),
+          BottomNavigationBarItem(
+            icon: _buildNavIcon(Icons.confirmation_number_outlined,
+                Icons.confirmation_number, 2),
+            label: 'Coupons',
+          ),
+          BottomNavigationBarItem(
+            icon: _buildNavIcon(Icons.store_outlined, Icons.store, 3),
+            label: 'Stores',
+          ),
+          BottomNavigationBarItem(
+            icon: _buildNavIcon(Icons.bookmark_outline, Icons.bookmark, 4),
+            label: 'Saved',
+          ),
+        ],
+      ),
     );
   }
 
-  // ============================================================================
-  // 6. FLOATING ACTION BUTTON - SHOPPING LIST
-  // ============================================================================
+  Widget _buildNavIcon(IconData outlinedIcon, IconData filledIcon, int index) {
+    final isSelected = _currentIndex == index;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: isSelected
+            ? const Color(0xFF6366F1).withOpacity(0.1)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(
+        isSelected ? filledIcon : outlinedIcon,
+        size: 24,
+      ),
+    );
+  }
 
   Widget _buildFloatingActionButton() {
     return FloatingActionButton(
-      onPressed: () => _showShoppingListOptions(),
+      onPressed: () => _showQuickActions(),
       backgroundColor: const Color(0xFF6366F1),
-      child: const Icon(Icons.add_shopping_cart),
+      child: const Icon(Icons.add, color: Colors.white),
     );
   }
 
-  void _showShoppingListOptions() {
+  void _showQuickActions() {
     showModalBottomSheet(
       context: context,
+      backgroundColor: Colors.transparent,
       builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
         padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Quick Actions',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 20),
             ListTile(
-              leading: const Icon(Icons.add),
-              title: const Text('Create New Shopping List'),
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.add_shopping_cart, color: Colors.green),
+              ),
+              title: const Text('Create Shopping List'),
+              subtitle: const Text('Plan your shopping trip'),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.pushNamed(context, '/shopping-list/create');
+                _navigateToCreateShoppingList();
               },
             ),
             ListTile(
-              leading: const Icon(Icons.list),
-              title: const Text('View Shopping Lists'),
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.favorite_border, color: Colors.orange),
+              ),
+              title: const Text('Add to Wishlist'),
+              subtitle: const Text('Save items for later'),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.pushNamed(context, '/shopping-lists');
+                _navigateToWishlist();
               },
             ),
             ListTile(
-              leading: const Icon(Icons.favorite),
-              title: const Text('View Wishlist'),
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.qr_code_scanner, color: Colors.blue),
+              ),
+              title: const Text('Scan QR Code'),
+              subtitle: const Text('Scan coupon or flyer'),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.pushNamed(context, '/wishlist');
+                _navigateToQRScanner();
               },
             ),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.purple.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.location_on, color: Colors.purple),
+              ),
+              title: const Text('Find Nearby Deals'),
+              subtitle: const Text('Discover local offers'),
+              onTap: () {
+                Navigator.pop(context);
+                _navigateToNearbyDeals();
+              },
+            ),
+            const SizedBox(height: 20),
           ],
         ),
       ),
     );
   }
-}
 
-// ============================================================================
-// 7. HOME TAB - FEATURED CONTENT
-// ============================================================================
-
-class HomeTab extends ConsumerWidget {
-  const HomeTab({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Quick actions
-          _buildQuickActions(context),
-          const SizedBox(height: 24),
-
-          // Nearby deals section
-          _buildSectionHeader('Nearby Deals', () {
-            Navigator.pushNamed(context, '/nearby-deals');
-          }),
-          const SizedBox(height: 12),
-          _buildNearbyDealsCarousel(),
-          const SizedBox(height: 24),
-
-          // Featured flyers
-          _buildSectionHeader('Featured Flyers', () {
-            Navigator.pushNamed(context, '/flyers');
-          }),
-          const SizedBox(height: 12),
-          _buildFeaturedFlyersGrid(),
-          const SizedBox(height: 24),
-
-          // Categories
-          _buildSectionHeader('Shop by Category', () {
-            Navigator.pushNamed(context, '/categories');
-          }),
-          const SizedBox(height: 12),
-          _buildCategoriesGrid(),
-          const SizedBox(height: 24),
-
-          // Preferred stores
-          _buildSectionHeader('Your Favorite Stores', () {
-            Navigator.pushNamed(context, '/preferred-stores');
-          }),
-          const SizedBox(height: 12),
-          _buildPreferredStoresCarousel(),
-        ],
-      ),
+  // Navigation methods
+  void _navigateToSearch() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const SearchPage()),
     );
   }
 
-  Widget _buildQuickActions(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-        ),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildQuickActionItem(
-            icon: Icons.qr_code_scanner,
-            label: 'Scan Coupon',
-            onTap: () => Navigator.pushNamed(context, '/scan-coupon'),
-          ),
-          _buildQuickActionItem(
-            icon: Icons.location_on,
-            label: 'Find Stores',
-            onTap: () => Navigator.pushNamed(context, '/find-stores'),
-          ),
-          _buildQuickActionItem(
-            icon: Icons.local_offer,
-            label: 'Best Deals',
-            onTap: () => Navigator.pushNamed(context, '/best-deals'),
-          ),
-        ],
-      ),
+  void _navigateToNotifications() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const NotificationsPage()),
     );
   }
 
-  Widget _buildQuickActionItem({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: Colors.white, size: 24),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
+  void _navigateToProfile() {
+    // Navigate to profile page (can be separate page or modal)
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ProfilePage()),
+    );
+    // Navigator.pushNamed(context, '/profile');
+  }
+
+  void _navigateToCreateShoppingList() {
+    // Will navigate to shopping list creation in SavedTab
+    setState(() {
+      _currentIndex = 4;
+      _tabController.animateTo(4);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+          content: Text('Navigated to Saved tab for shopping lists')),
     );
   }
 
-  Widget _buildSectionHeader(String title, VoidCallback onSeeAll) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        TextButton(
-          onPressed: onSeeAll,
-          child: const Text('See All'),
-        ),
-      ],
+  void _navigateToWishlist() {
+    // Will navigate to wishlist in SavedTab
+    setState(() {
+      _currentIndex = 4;
+      _tabController.animateTo(4);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Navigated to Saved tab for wishlist')),
     );
   }
 
-  Widget _buildNearbyDealsCarousel() {
-    // TODO: Implement with real data from API
-    return SizedBox(
-      height: 200,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: 5,
-        itemBuilder: (context, index) {
-          return Container(
-            width: 300,
-            margin: const EdgeInsets.only(right: 16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              image: const DecorationImage(
-                image: AssetImage('assets/images/test.jpg'),
-                fit: BoxFit.cover,
-              ),
-            ),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.7),
-                  ],
-                ),
-              ),
-              padding: const EdgeInsets.all(16),
-              child: const Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Store Name',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const Text(
-                    'Special Offer Description',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on,
-                          color: Colors.white, size: 16),
-                      const SizedBox(width: 4),
-                      const Text(
-                        '0.5 km away',
-                        style: TextStyle(color: Colors.white, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
+  void _navigateToQRScanner() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('QR Scanner feature coming soon!')),
     );
   }
 
-  Widget _buildFeaturedFlyersGrid() {
-    // TODO: Implement with real data from API
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 0.75,
-      ),
-      itemCount: 4,
-      itemBuilder: (context, index) {
-        return Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Stack(
-              children: [
-                Image.asset(
-                  'assets/images/test.jpg',
-                  width: double.infinity,
-                  height: double.infinity,
-                  fit: BoxFit.cover,
-                ),
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Text(
-                      'NEW',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.transparent,
-                          Colors.black.withOpacity(0.8),
-                        ],
-                      ),
-                    ),
-                    child: const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Store Name',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          'Valid until Dec 31',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildCategoriesGrid() {
-    final categories = [
-      {'name': 'Groceries', 'icon': Icons.shopping_cart, 'color': Colors.green},
-      {
-        'name': 'Electronics',
-        'icon': Icons.phone_android,
-        'color': Colors.blue
-      },
-      {'name': 'Fashion', 'icon': Icons.checkroom, 'color': Colors.pink},
-      {'name': 'Home & Garden', 'icon': Icons.home, 'color': Colors.orange},
-    ];
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 0.8,
-      ),
-      itemCount: categories.length,
-      itemBuilder: (context, index) {
-        final category = categories[index];
-        return GestureDetector(
-          onTap: () =>
-              Navigator.pushNamed(context, '/category/${category['name']}'),
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: (category['color'] as Color).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  category['icon'] as IconData,
-                  color: category['color'] as Color,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                category['name'] as String,
-                style: const TextStyle(fontSize: 12),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildPreferredStoresCarousel() {
-    // TODO: Implement with real data from API
-    return SizedBox(
-      height: 80,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: 5,
-        itemBuilder: (context, index) {
-          return Container(
-            width: 80,
-            margin: const EdgeInsets.only(right: 12),
-            child: Column(
-              children: [
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    image: const DecorationImage(
-                      image: AssetImage('assets/images/test.jpg'),
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Store',
-                  style: TextStyle(fontSize: 10),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          );
-        },
-      ),
+  void _navigateToNearbyDeals() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Nearby Deals feature coming soon!')),
     );
   }
 }

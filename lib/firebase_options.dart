@@ -63,9 +63,10 @@ class DefaultFirebaseOptions {
     messagingSenderId: '149519171356',
     projectId: 'topprix-9a1db',
     storageBucket: 'topprix-9a1db.firebasestorage.app',
-    androidClientId: '149519171356-upgc3qt1v1s8h0a3vqngqkn7husv3pmm.apps.googleusercontent.com',
-    iosClientId: '149519171356-mm040kkmkubbncrlo95f05005f1ji0k8.apps.googleusercontent.com',
+    androidClientId:
+        '149519171356-upgc3qt1v1s8h0a3vqngqkn7husv3pmm.apps.googleusercontent.com',
+    iosClientId:
+        '149519171356-mm040kkmkubbncrlo95f05005f1ji0k8.apps.googleusercontent.com',
     iosBundleId: 'com.kliklokal.topprix',
   );
-
 }
