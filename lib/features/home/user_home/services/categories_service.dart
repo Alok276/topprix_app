@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:topprix/provider/dio_provider.dart';
+import 'package:topprix/core/provider/dio_provider.dart';
 
 // Category Model
 class Category {

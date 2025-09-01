@@ -53,6 +53,12 @@ dependencies:
   riverpod_annotation: ^2.6.1
   firebase_storage: ^12.4.10
   qr_flutter: ^4.1.0
+  image_picker: ^1.1.2
+  url_launcher: ^6.3.1
+  cached_network_image: ^3.4.1
+  flutter_localizations:
+    sdk: flutter
+  intl: any
 
 dev_dependencies:
   flutter_test:
@@ -78,6 +84,7 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+  generate: true
 
   # To add assets to your application, add an assets section, like this:
   assets:

@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:topprix/features/auth/service/auth_service.dart';
 import 'package:topprix/features/home/user_home/tabs/flyer.dart';
-import 'package:topprix/provider/dio_provider.dart';
+import 'package:topprix/core/provider/dio_provider.dart';
 
 // Coupon Model (matches your API)
 class Coupon {

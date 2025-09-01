@@ -4,7 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:topprix/features/home/user_home/services/store_service.dart';
-import 'package:topprix/provider/dio_provider.dart';
+import 'package:topprix/core/provider/dio_provider.dart';
 
 // Location Model
 class UserLocation {

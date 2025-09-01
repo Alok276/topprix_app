@@ -449,6 +449,87 @@ class BackendUserService {
     );
   }
 
+// Get current user profile - useful for refreshing data after update
+  Future<ApiResponse<BackendUser>> getCurrentUserProfile({
+    required String email,
+  }) async {
+    try {
+      print('🔍 Fetching current user profile for: $email');
+
+      final response = await _dio.get(
+        '/user/$email',
+        options: _getOptions(userEmail: email),
+      );
+
+      if (response.statusCode == 200) {
+        Map<String, dynamic> userData;
+        if (response.data['user'] != null) {
+          userData = response.data['user'];
+        } else if (response.data is Map<String, dynamic> &&
+            response.data['email'] != null) {
+          userData = response.data;
+        } else {
+          throw Exception('Invalid user data format');
+        }
+
+        return ApiResponse<BackendUser>(
+          success: true,
+          message: 'Profile retrieved successfully',
+          data: BackendUser.fromJson(userData),
+        );
+      } else {
+        return ApiResponse<BackendUser>(
+          success: false,
+          message: response.data['message'] ?? 'Failed to get user profile',
+          error: response.data['error'],
+        );
+      }
+    } on DioException catch (e) {
+      return _handleDioError<BackendUser>(e, 'Failed to get user profile');
+    } catch (e) {
+      print('❌ Get profile unexpected error: $e');
+      return ApiResponse<BackendUser>(
+        success: false,
+        message: 'An unexpected error occurred while fetching profile',
+        error: e.toString(),
+      );
+    }
+  }
+
+// Validate user data before sending to backend
+  Map<String, String> validateUserData({
+    String? name,
+    String? phone,
+    String? location,
+  }) {
+    final errors = <String, String>{};
+
+    if (name != null && name.isNotEmpty) {
+      if (name.trim().length < 2) {
+        errors['name'] = 'Name must be at least 2 characters long';
+      }
+      if (name.trim().length > 50) {
+        errors['name'] = 'Name must be less than 50 characters';
+      }
+    }
+
+    if (phone != null && phone.isNotEmpty) {
+      // Basic phone validation - adjust regex based on your requirements
+      final phoneRegex = RegExp(r'^\+?[\d\s\-\(\)]{10,15}$');
+      if (!phoneRegex.hasMatch(phone.trim())) {
+        errors['phone'] = 'Please enter a valid phone number';
+      }
+    }
+
+    if (location != null && location.isNotEmpty) {
+      if (location.trim().length > 100) {
+        errors['location'] = 'Location must be less than 100 characters';
+      }
+    }
+
+    return errors;
+  }
+
   // Close Dio instance (call this when disposing the service)
   void dispose() {
     _dio.close();

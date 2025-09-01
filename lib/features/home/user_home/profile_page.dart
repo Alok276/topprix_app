@@ -1,6 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:topprix/features/auth/service/auth_service.dart';
+import 'package:topprix/features/auth/service/auth_service.dart'
+    as auth_service;
+import 'package:topprix/features/home/user_home/settings/account_settings/edit_profile/edit_profile_page.dart';
+import 'package:topprix/features/home/user_home/settings/preferences/saved_items_pages.dart';
+import 'package:topprix/features/home/user_home/settings/support&legal/about_us.dart';
+import 'package:topprix/features/home/user_home/settings/support&legal/contact_us_page.dart';
+import 'package:topprix/features/home/user_home/settings/support&legal/legal_notice.dart';
+import 'package:topprix/features/home/user_home/settings/support&legal/privacy_policy.dart';
+import 'package:topprix/features/home/user_home/settings/support&legal/terms_and_conditions.dart';
+import 'package:topprix/features/home/user_home/settings/support&legal/user_feedback.dart';
 
 class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({super.key});
@@ -51,8 +60,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
 
   @override
   Widget build(BuildContext context) {
-    final user = ref.watch(currentBackendUserProvider);
-    final firebaseUser = ref.watch(currentFirebaseUserProvider);
+    final user = ref.watch(auth_service.currentBackendUserProvider);
+    final firebaseUser = ref.watch(auth_service.currentFirebaseUserProvider);
 
     return Scaffold(
       body: CustomScrollView(
@@ -80,10 +89,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
 
                       // Preferences Section
                       _buildPreferencesSection(),
-                      const SizedBox(height: 16),
-
-                      // Activity Section
-                      _buildActivitySection(),
                       const SizedBox(height: 16),
 
                       // Support & Legal Section
@@ -531,25 +536,23 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
             icon: Icons.edit,
             title: 'Edit Profile',
             subtitle: 'Update your personal information',
-            onTap: () => null // _editProfile(),
-            ),
-        _buildSettingsItem(
-            icon: Icons.security,
-            title: 'Password & Security',
-            subtitle: 'Change password and security settings',
-            onTap: () => null //_navigateToSecurity(),
-            ),
-        _buildSettingsItem(
-            icon: Icons.notifications_outlined,
-            title: 'Notifications',
-            subtitle: 'Manage notification preferences',
-            showBadge: true,
-            onTap: () => null //_navigateToNotifications(),
+            onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const EditProfilePage()),
+                )
+            // _editProfile(),
             ),
         _buildSettingsItem(
             icon: Icons.payment,
-            title: 'Payment Methods',
-            subtitle: 'Manage your payment options',
+            title: 'Payment History',
+            subtitle: 'See your payment transactions',
+            onTap: () => null //_navigateToPaymentMethods(),
+            ),
+        _buildSettingsItem(
+            icon: Icons.delete,
+            title: 'Delete Account',
+            subtitle: 'Permanently delete your account',
             onTap: () => null //_navigateToPaymentMethods(),
             ),
       ],
@@ -568,16 +571,20 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
             onTap: () => null //_navigateToLanguage(),
             ),
         _buildSettingsItem(
-            icon: Icons.dark_mode_outlined,
-            title: 'Theme',
-            subtitle: 'Light mode',
-            onTap: () => null //_navigateToTheme(),
-            ),
-        _buildSettingsItem(
             icon: Icons.location_on_outlined,
             title: 'Location Services',
             subtitle: 'Manage location preferences',
             onTap: () => null //_navigateToLocation(),
+            ),
+        _buildSettingsItem(
+            icon: Icons.save,
+            title: 'Saved',
+            subtitle: 'View your saved items',
+            onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const SavedItemsPage()),
+                ) //_navigateToLanguage(),
             ),
         _buildSettingsItem(
             icon: Icons.category_outlined,
@@ -589,39 +596,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     );
   }
 
-  Widget _buildActivitySection() {
-    return _buildSection(
-      title: 'Activity & Data',
-      icon: Icons.analytics,
-      children: [
-        _buildSettingsItem(
-          icon: Icons.history,
-          title: 'Purchase History',
-          subtitle: 'View your transaction history',
-          onTap: () => _navigateToPurchaseHistory(),
-        ),
-        _buildSettingsItem(
-          icon: Icons.insights,
-          title: 'Savings Analytics',
-          subtitle: 'Track your savings over time',
-          onTap: () => _navigateToSavingsAnalytics(),
-        ),
-        _buildSettingsItem(
-          icon: Icons.download,
-          title: 'Download Data',
-          subtitle: 'Export your account data',
-          onTap: () => _exportUserData(),
-        ),
-        _buildSettingsItem(
-          icon: Icons.delete_outline,
-          title: 'Clear Data',
-          subtitle: 'Remove saved items and history',
-          onTap: () => _clearUserData(),
-        ),
-      ],
-    );
-  }
-
   Widget _buildSupportSection() {
     return _buildSection(
       title: 'Support & Legal',
@@ -629,39 +603,59 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
       children: [
         _buildSettingsItem(
             icon: Icons.help_outline,
-            title: 'Help Center',
-            subtitle: 'Get help and support',
-            onTap: () => null //_navigateToHelpCenter(),
+            title: 'Contact Us',
+            subtitle: 'Get support and assistance',
+            onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const ContactUsPage()),
+                ) //_navigateToHelpCenter(),
             ),
         _buildSettingsItem(
             icon: Icons.feedback_outlined,
             title: 'Send Feedback',
             subtitle: 'Help us improve TopPrix',
-            onTap: () => null //_navigateToFeedback(),
-            ),
-        _buildSettingsItem(
-            icon: Icons.star_outline,
-            title: 'Rate App',
-            subtitle: 'Rate TopPrix on the App Store',
-            onTap: () => null //_navigateToRateApp(),
-            ),
+            onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => FeedbackPage()),
+                )),
         _buildSettingsItem(
             icon: Icons.description_outlined,
             title: 'Terms & Conditions',
             subtitle: 'Read our terms of service',
-            onTap: () => null //_navigateToTerms(),
+            onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const TermsConditionsPage()),
+                ) //_navigateToTerms(),
             ),
         _buildSettingsItem(
             icon: Icons.privacy_tip_outlined,
             title: 'Privacy Policy',
             subtitle: 'Learn how we protect your data',
-            onTap: () => null //_navigateToPrivacy(),
+            onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const PrivacyPolicyPage()),
+                ) //_navigateToPrivacy(),
             ),
         _buildSettingsItem(
-            icon: Icons.recycling,
-            title: 'E-Waste Policy',
-            subtitle: 'Our environmental commitment',
-            onTap: () => null //_navigateToEWaste(),
+            icon: Icons.info_outline,
+            title: 'About Us',
+            subtitle: 'Learn more about TopPrix',
+            onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const AboutUsPage()),
+                ) //_navigateToHelpCenter(),
+            ),
+        _buildSettingsItem(
+            icon: Icons.gavel_outlined,
+            title: 'Legal Notice',
+            subtitle: 'Important legal information',
+            onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => LegalNoticePage()),
+                ) //_navigateToEWaste(),
             ),
       ],
     );
@@ -1428,7 +1422,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
         ),
       );
 
-      final authService = ref.read(topPrixAuthProvider.notifier);
+      final authService = ref.read(auth_service.topPrixAuthProvider.notifier);
       await authService.signOut();
 
       if (mounted) {

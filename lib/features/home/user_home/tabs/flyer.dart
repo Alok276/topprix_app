@@ -2,7 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:topprix/features/auth/service/auth_service.dart';
-import 'package:topprix/provider/dio_provider.dart';
+import 'package:topprix/core/provider/dio_provider.dart';
 
 // Flyer Model (matches your API)
 class Flyer {

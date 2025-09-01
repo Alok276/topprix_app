@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:topprix/features/auth/service/auth_service.dart';
 import 'package:topprix/features/home/user_home/home_dashboard_tab.dart';
 import 'package:topprix/features/home/user_home/search_page.dart';
+import 'package:topprix/features/home/user_home/tabs/antiwaste.dart';
 import 'package:topprix/features/home/user_home/tabs/coupons.dart';
 import 'package:topprix/features/home/user_home/tabs/flyer.dart';
 import 'package:topprix/features/home/user_home/tabs/notifications_page.dart';
@@ -139,7 +140,7 @@ class _UserHomePageState extends ConsumerState<UserHomePage>
       case 3:
         return const Text('Stores');
       case 4:
-        return const Text('Saved');
+        return const Text('AntiWaste');
       default:
         return const Text('TopPrix');
     }
@@ -154,7 +155,7 @@ class _UserHomePageState extends ConsumerState<UserHomePage>
         FlyersTab(), // Your existing flyers tab
         CouponsTab(), // Your existing coupons tab
         StoresTab(), // Your existing stores tab
-        SavedTab(), // New saved items tab
+        AntiWasteTabBar() // New saved items tab
       ],
     );
   }
@@ -205,8 +206,8 @@ class _UserHomePageState extends ConsumerState<UserHomePage>
             label: 'Stores',
           ),
           BottomNavigationBarItem(
-            icon: _buildNavIcon(Icons.bookmark_outline, Icons.bookmark, 4),
-            label: 'Saved',
+            icon: _buildNavIcon(Icons.recycling_outlined, Icons.recycling, 4),
+            label: 'AntiWaste',
           ),
         ],
       ),

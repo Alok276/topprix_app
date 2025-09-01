@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:topprix/features/auth/service/auth_service.dart';
 import 'package:topprix/features/auth/service/backend_user_service.dart';
 import 'package:topprix/features/home/user_home/tabs/flyer.dart';
-import 'package:topprix/provider/dio_provider.dart';
+import 'package:topprix/core/provider/dio_provider.dart';
 
 // Extended Store Model (matches your API)
 class StoreDetailed {

@@ -75,6 +75,22 @@ class _LoginPageState extends ConsumerState<LoginPage>
 
   @override
   Widget build(BuildContext context) {
+    // Listen to auth state changes
+    ref.listen<AuthState>(topPrixAuthProvider, (previous, next) {
+      if (next.isAuthenticated && context.mounted) {
+        _handleSuccessfulLogin();
+      } else if (next.error != null && context.mounted) {
+        _handleAuthError(next.error!);
+      }
+
+      // Update loading state
+      if (mounted) {
+        setState(() {
+          _isLoading = next.isLoading;
+        });
+      }
+    });
+
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
@@ -249,8 +265,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
                                         // Google Sign In (Customer only)
                                         if (_loginType ==
                                             LoginType.customer) ...[
-                                          _buildGoogleSignInButton(
-                                              ref, context),
+                                          _buildGoogleSignInButton(),
                                           const SizedBox(height: 24),
 
                                           // Divider
@@ -304,8 +319,9 @@ class _LoginPageState extends ConsumerState<LoginPage>
                                         Align(
                                           alignment: Alignment.centerRight,
                                           child: TextButton(
-                                            onPressed: () =>
-                                                _handleForgotPassword(),
+                                            onPressed: _isLoading
+                                                ? null
+                                                : () => _handleForgotPassword(),
                                             child: Text(
                                               "Forgot Password?",
                                               style: TextStyle(
@@ -320,7 +336,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
                                         const SizedBox(height: 24),
 
                                         // Sign In button
-                                        _buildPrimaryButton(ref),
+                                        _buildPrimaryButton(),
 
                                         const SizedBox(height: 24),
 
@@ -336,8 +352,10 @@ class _LoginPageState extends ConsumerState<LoginPage>
                                               children: [
                                                 WidgetSpan(
                                                   child: GestureDetector(
-                                                    onTap: () =>
-                                                        _navigateToSignUp(),
+                                                    onTap: _isLoading
+                                                        ? null
+                                                        : () =>
+                                                            _navigateToSignUp(),
                                                     child: Text(
                                                       "Sign up now",
                                                       style: TextStyle(
@@ -377,11 +395,13 @@ class _LoginPageState extends ConsumerState<LoginPage>
   Widget _buildLoginTypeButton(String text, IconData icon, LoginType type) {
     final isSelected = _loginType == type;
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _loginType = type;
-        });
-      },
+      onTap: _isLoading
+          ? null
+          : () {
+              setState(() {
+                _loginType = type;
+              });
+            },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -424,11 +444,11 @@ class _LoginPageState extends ConsumerState<LoginPage>
     );
   }
 
-  Widget _buildGoogleSignInButton(WidgetRef ref, BuildContext context) {
+  Widget _buildGoogleSignInButton() {
     return SizedBox(
       width: double.infinity,
       child: OutlinedButton(
-        onPressed: () => handleGoogleSignIn(ref: ref, context: context),
+        onPressed: _isLoading ? null : () => _handleGoogleSignIn(),
         style: OutlinedButton.styleFrom(
           padding: const EdgeInsets.symmetric(vertical: 16),
           side: const BorderSide(color: Color(0xFFE5E7EB)),
@@ -436,26 +456,43 @@ class _LoginPageState extends ConsumerState<LoginPage>
             borderRadius: BorderRadius.circular(12),
           ),
           backgroundColor: Colors.white,
+          disabledBackgroundColor: Colors.grey[100],
         ),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.g_mobiledata,
-              color: Color(0xFF4285F4),
-              size: 24,
-            ),
-            SizedBox(width: 12),
-            Text(
-              "Continue with Google",
-              style: TextStyle(
-                color: Color(0xFF1F2937),
-                fontWeight: FontWeight.w600,
-                fontSize: 16,
+        child: _isLoading
+            ? const SizedBox(
+                height: 24,
+                width: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4285F4)),
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 24,
+                    height: 24,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.g_mobiledata,
+                      color: Color(0xFF4285F4),
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    "Continue with Google",
+                    style: TextStyle(
+                      color: Color(0xFF1F2937),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -474,6 +511,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
   Widget _buildEmailField() {
     return TextFormField(
       controller: _emailController,
+      enabled: !_isLoading,
       keyboardType: TextInputType.emailAddress,
       decoration: InputDecoration(
         hintText: _loginType == LoginType.retailer
@@ -494,7 +532,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
           borderSide: BorderSide(color: _getAccentColor(), width: 2),
         ),
         filled: true,
-        fillColor: const Color(0xFFF9FAFB),
+        fillColor: _isLoading ? Colors.grey[50] : const Color(0xFFF9FAFB),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       ),
@@ -513,6 +551,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
   Widget _buildPasswordField() {
     return TextFormField(
       controller: _passwordController,
+      enabled: !_isLoading,
       obscureText: !_isPasswordVisible,
       decoration: InputDecoration(
         hintText: "Enter your password",
@@ -523,11 +562,13 @@ class _LoginPageState extends ConsumerState<LoginPage>
             _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
             color: Colors.grey[400],
           ),
-          onPressed: () {
-            setState(() {
-              _isPasswordVisible = !_isPasswordVisible;
-            });
-          },
+          onPressed: _isLoading
+              ? null
+              : () {
+                  setState(() {
+                    _isPasswordVisible = !_isPasswordVisible;
+                  });
+                },
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -542,7 +583,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
           borderSide: BorderSide(color: _getAccentColor(), width: 2),
         ),
         filled: true,
-        fillColor: const Color(0xFFF9FAFB),
+        fillColor: _isLoading ? Colors.grey[50] : const Color(0xFFF9FAFB),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       ),
@@ -558,18 +599,11 @@ class _LoginPageState extends ConsumerState<LoginPage>
     );
   }
 
-  Widget _buildPrimaryButton(WidgetRef ref) {
+  Widget _buildPrimaryButton() {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: _isLoading
-            ? null
-            : () => handleEmailSignIn(
-                ref: ref,
-                context: context,
-                email: _emailController.text,
-                password: _passwordController.text,
-                userRole: _getUserRole()),
+        onPressed: _isLoading ? null : () => _handleEmailSignIn(),
         style: ElevatedButton.styleFrom(
           backgroundColor: _getAccentColor(),
           foregroundColor: Colors.white,
@@ -616,87 +650,73 @@ class _LoginPageState extends ConsumerState<LoginPage>
     }
   }
 
-  String _getUserRole() {
-    return _loginType == LoginType.customer ? "USER" : "RETAILER";
-  }
-
   // Handle email sign-in
-  Future<void> handleEmailSignIn({
-    required WidgetRef ref,
-    required BuildContext context,
-    required String email,
-    required String password,
-    required String userRole,
-  }) async {
+  Future<void> _handleEmailSignIn() async {
+    if (!_formKey.currentState!.validate()) return;
+
     try {
       final authService = ref.read(topPrixAuthProvider.notifier);
 
       await authService.signInWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
       );
-
-      if (context.mounted) {
-        // Navigate based on user role
-        final user = ref.read(currentBackendUserProvider);
-        if (user?.role == 'RETAILER') {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const RetailerHome(),
-            ),
-          );
-        } else {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const UserHomePage(),
-            ),
-          );
-        }
-      }
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString().replaceAll('Exception: ', '')),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      // Error is handled by the listener
+      print('Email sign-in error: $e');
     }
   }
 
-  Future<void> handleGoogleSignIn({
-    required WidgetRef ref,
-    required BuildContext context,
-  }) async {
+  // Handle Google sign-in
+  Future<void> _handleGoogleSignIn() async {
     try {
       final authService = ref.read(topPrixAuthProvider.notifier);
-
       await authService.signInWithGoogle();
-
-      if (context.mounted) {
-        // Always navigate to customer home for Google sign-in
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const UserHomePage(),
-          ),
-        );
-      }
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString().replaceAll('Exception: ', '')),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      // Error is handled by the listener
+      print('Google sign-in error: $e');
     }
+  }
+
+  // Handle successful login
+  void _handleSuccessfulLogin() {
+    final authState = ref.read(topPrixAuthProvider);
+
+    if (!authState.isAuthenticated) return;
+
+    // Navigate based on user role
+    if (authState.backendUser?.role == 'RETAILER') {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const RetailerHome(),
+        ),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const UserHomePage(),
+        ),
+      );
+    }
+  }
+
+  // Handle authentication errors
+  void _handleAuthError(String error) {
+    // Don't show error for cancelled operations
+    if (error.toLowerCase().contains('cancel')) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(error.replaceAll('Exception: ', '')),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+      ),
+    );
   }
 
   void _handleForgotPassword() {
